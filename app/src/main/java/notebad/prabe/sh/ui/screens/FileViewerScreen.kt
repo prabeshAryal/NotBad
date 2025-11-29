@@ -161,6 +161,11 @@ private fun FileViewerContent(
         is ContentState.TextContent -> content.isModified
         else -> false
     }
+    
+    val wordWrapEnabled = when (val content = state.contentState) {
+        is ContentState.TextContent -> content.isWordWrapEnabled
+        else -> true
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Top app bar
@@ -168,10 +173,12 @@ private fun FileViewerContent(
             metadata = state.metadata,
             viewMode = state.viewMode,
             isModified = isModified,
+            wordWrapEnabled = wordWrapEnabled,
             onNavigateBack = onNavigateBack,
             onSave = { onEvent(FileViewerEvent.SaveFile) },
             onReload = { onEvent(FileViewerEvent.ReloadFile) },
-            onViewModeChange = { onEvent(FileViewerEvent.ChangeViewMode(it)) }
+            onViewModeChange = { onEvent(FileViewerEvent.ChangeViewMode(it)) },
+            onToggleWordWrap = { onEvent(FileViewerEvent.ToggleWordWrap) }
         )
 
         // Truncation warning if applicable
@@ -207,6 +214,7 @@ private fun FileViewerContent(
                         content = content,
                         viewMode = state.viewMode,
                         isReadOnly = state.metadata.isReadOnly,
+                        wordWrapEnabled = wordWrapEnabled,
                         onTextChange = { onEvent(FileViewerEvent.TextChanged(it)) },
                         onTogglePreview = { onEvent(FileViewerEvent.ToggleMarkdownPreview) }
                     )
@@ -236,6 +244,7 @@ private fun TextContentView(
     content: ContentState.TextContent,
     viewMode: ViewMode,
     isReadOnly: Boolean,
+    wordWrapEnabled: Boolean,
     onTextChange: (String) -> Unit,
     onTogglePreview: () -> Unit
 ) {
@@ -255,6 +264,7 @@ private fun TextContentView(
                 isReadOnly = isReadOnly,
                 language = null, // No syntax highlighting in text mode
                 showLineNumbers = false, // No line numbers in text mode
+                wordWrapEnabled = wordWrapEnabled,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -266,6 +276,7 @@ private fun TextContentView(
                 isReadOnly = isReadOnly,
                 language = content.language,
                 showLineNumbers = true, // Line numbers only in code mode
+                wordWrapEnabled = wordWrapEnabled,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -284,6 +295,7 @@ private fun TextContentView(
                 isReadOnly = isReadOnly,
                 language = "markdown",
                 showLineNumbers = false, // No line numbers for markdown source
+                wordWrapEnabled = wordWrapEnabled,
                 modifier = Modifier.fillMaxSize()
             )
         }

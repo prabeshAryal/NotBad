@@ -4,13 +4,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.WrapText
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DataObject
 import androidx.compose.material.icons.filled.Description
@@ -48,10 +54,12 @@ import notebad.prabe.sh.ui.state.ViewMode
  * @param metadata File metadata to display
  * @param viewMode Current view mode
  * @param isModified Whether the file has unsaved changes
+ * @param wordWrapEnabled Whether word wrap is enabled
  * @param onNavigateBack Callback for back navigation
  * @param onSave Callback to save the file
  * @param onReload Callback to reload the file
  * @param onViewModeChange Callback to change view mode
+ * @param onToggleWordWrap Callback to toggle word wrap
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,10 +67,12 @@ fun FileViewerTopBar(
     metadata: FileMetadata,
     viewMode: ViewMode,
     isModified: Boolean,
+    wordWrapEnabled: Boolean = true,
     onNavigateBack: () -> Unit,
     onSave: () -> Unit,
     onReload: () -> Unit,
     onViewModeChange: (ViewMode) -> Unit,
+    onToggleWordWrap: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -75,44 +85,43 @@ fun FileViewerTopBar(
                     text = metadata.displayName,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall
+                    style = MaterialTheme.typography.titleMedium
                 )
                 if (isModified) {
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "•",
                         color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.titleSmall
+                        style = MaterialTheme.typography.titleMedium
                     )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = metadata.formattedSize,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
         navigationIcon = {
-            IconButton(onClick = onNavigateBack, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = onNavigateBack) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    modifier = Modifier.size(20.dp)
+                    contentDescription = "Back"
                 )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        modifier = modifier.height(48.dp), // Compact height
+        windowInsets = WindowInsets.statusBars, // Handle status bar / camera hole
+        modifier = modifier,
         actions = {
             // View mode toggle
-            IconButton(onClick = { showViewModeMenu = true }, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = { showViewModeMenu = true }) {
                 Icon(
                     imageVector = viewMode.icon,
-                    contentDescription = "Change view mode",
-                    modifier = Modifier.size(20.dp)
+                    contentDescription = "Change view mode"
                 )
 
                 DropdownMenu(
@@ -168,13 +177,11 @@ fun FileViewerTopBar(
             if (viewMode.isEditable && !metadata.isReadOnly) {
                 IconButton(
                     onClick = onSave,
-                    enabled = isModified,
-                    modifier = Modifier.size(40.dp)
+                    enabled = isModified
                 ) {
                     Icon(
                         imageVector = Icons.Default.Save,
                         contentDescription = "Save",
-                        modifier = Modifier.size(20.dp),
                         tint = if (isModified) {
                             MaterialTheme.colorScheme.primary
                         } else {
@@ -185,17 +192,37 @@ fun FileViewerTopBar(
             }
 
             // More options menu
-            IconButton(onClick = { showMenu = true }, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = { showMenu = true }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More options",
-                    modifier = Modifier.size(20.dp)
+                    contentDescription = "More options"
                 )
 
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
                 ) {
+                    // Word Wrap toggle
+                    DropdownMenuItem(
+                        text = { Text("Word Wrap") },
+                        onClick = {
+                            onToggleWordWrap()
+                            showMenu = false
+                        },
+                        leadingIcon = {
+                            Icon(Icons.AutoMirrored.Filled.WrapText, contentDescription = null)
+                        },
+                        trailingIcon = {
+                            if (wordWrapEnabled) {
+                                Icon(
+                                    Icons.Default.Check, 
+                                    contentDescription = "Enabled",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    )
+                    
                     DropdownMenuItem(
                         text = { Text("Reload") },
                         onClick = {

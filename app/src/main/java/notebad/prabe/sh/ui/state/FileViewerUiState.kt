@@ -86,7 +86,8 @@ sealed interface ContentState {
         val cursorPosition: Int = 0,
         val language: String? = null,
         val isTruncated: Boolean = false,
-        val totalSize: Long = 0
+        val totalSize: Long = 0,
+        val isWordWrapEnabled: Boolean = true
     ) : ContentState
 
     /**
@@ -140,6 +141,11 @@ sealed interface FileViewerEvent {
      * User requested to toggle between preview and source (for markdown)
      */
     data object ToggleMarkdownPreview : FileViewerEvent
+
+    /**
+     * User toggled word wrap
+     */
+    data object ToggleWordWrap : FileViewerEvent
 
     /**
      * User searched for text/hex

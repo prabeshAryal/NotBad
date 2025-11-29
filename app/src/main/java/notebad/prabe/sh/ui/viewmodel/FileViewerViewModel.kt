@@ -109,6 +109,7 @@ class FileViewerViewModel(
             is FileViewerEvent.SaveFile -> saveFile()
             is FileViewerEvent.ReloadFile -> reloadFile()
             is FileViewerEvent.ToggleMarkdownPreview -> toggleMarkdownPreview()
+            is FileViewerEvent.ToggleWordWrap -> toggleWordWrap()
             is FileViewerEvent.Search -> performSearch(event.query)
             is FileViewerEvent.CloseFile -> closeFile()
         }
@@ -323,6 +324,22 @@ class FileViewerViewModel(
         }
 
         _uiState.value = state.copy(viewMode = newMode)
+    }
+
+    /**
+     * Toggles word wrap on/off for text content.
+     */
+    private fun toggleWordWrap() {
+        val state = _uiState.value
+        if (state !is FileViewerUiState.Loaded) return
+        if (state.contentState !is ContentState.TextContent) return
+
+        val textContent = state.contentState as ContentState.TextContent
+        _uiState.value = state.copy(
+            contentState = textContent.copy(
+                isWordWrapEnabled = !textContent.isWordWrapEnabled
+            )
+        )
     }
 
     /**

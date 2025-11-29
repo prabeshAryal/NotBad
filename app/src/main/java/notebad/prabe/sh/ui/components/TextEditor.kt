@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -59,6 +60,7 @@ import notebad.prabe.sh.ui.theme.CodeTextStyle
  * @param isReadOnly Whether the editor is in read-only mode
  * @param language Optional language for syntax highlighting (null = plain text mode)
  * @param showLineNumbers Whether to show line numbers (only for code mode)
+ * @param wordWrapEnabled Whether to enable word wrapping
  * @param modifier Modifier for the component
  */
 @Composable
@@ -68,6 +70,7 @@ fun TextEditor(
     isReadOnly: Boolean = false,
     language: String? = null,
     showLineNumbers: Boolean = true,
+    wordWrapEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     // Only show line numbers in code mode (when language is specified)
@@ -100,19 +103,22 @@ fun TextEditor(
                 // Large file: Use LazyColumn for memory efficiency
                 LazyTextViewer(
                     lines = lines,
-                    language = language
+                    language = language,
+                    wordWrapEnabled = wordWrapEnabled
                 )
             } else if (isReadOnly) {
                 // Small file read-only: Regular scrollable text with word wrap
                 ReadOnlyTextViewer(
                     text = text,
-                    language = language
+                    language = language,
+                    wordWrapEnabled = wordWrapEnabled
                 )
             } else {
                 // Editable mode with word wrap
                 EditableTextField(
                     text = text,
-                    onTextChange = onTextChange
+                    onTextChange = onTextChange,
+                    wordWrapEnabled = wordWrapEnabled
                 )
             }
         }
@@ -190,15 +196,21 @@ private fun CollapsibleLineNumberColumn(
 private fun LazyTextViewer(
     lines: List<String>,
     language: String?,
+    wordWrapEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val horizontalScrollState = rememberScrollState()
     
     SelectionContainer {
         LazyColumn(
             state = listState,
             modifier = modifier
                 .fillMaxSize()
+                .then(
+                    if (!wordWrapEnabled) Modifier.horizontalScroll(horizontalScrollState)
+                    else Modifier
+                )
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             itemsIndexed(
@@ -217,8 +229,8 @@ private fun LazyTextViewer(
                         fontSize = 13.sp,
                         lineHeight = 18.sp
                     ),
-                    softWrap = true, // Enable word wrap
-                    modifier = Modifier.fillParentMaxWidth()
+                    softWrap = wordWrapEnabled,
+                    modifier = if (wordWrapEnabled) Modifier.fillParentMaxWidth() else Modifier
                 )
             }
         }
@@ -226,15 +238,17 @@ private fun LazyTextViewer(
 }
 
 /**
- * Read-only text viewer with word wrap for smaller files.
+ * Read-only text viewer with optional word wrap for smaller files.
  */
 @Composable
 private fun ReadOnlyTextViewer(
     text: String,
     language: String?,
+    wordWrapEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    val horizontalScrollState = rememberScrollState()
     
     SelectionContainer {
         val displayText = if (language != null) {
@@ -250,28 +264,34 @@ private fun ReadOnlyTextViewer(
                 fontSize = 13.sp,
                 lineHeight = 18.sp
             ),
-            softWrap = true, // Enable word wrap
+            softWrap = wordWrapEnabled,
             modifier = modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
+                .then(
+                    if (!wordWrapEnabled) Modifier.horizontalScroll(horizontalScrollState)
+                    else Modifier
+                )
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
 }
 
 /**
- * Editable text field with word wrap.
+ * Editable text field with optional word wrap.
  */
 @Composable
 private fun EditableTextField(
     text: String,
     onTextChange: (String) -> Unit,
+    wordWrapEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     var textFieldValue by remember(text) {
         mutableStateOf(TextFieldValue(text))
     }
     val scrollState = rememberScrollState()
+    val horizontalScrollState = rememberScrollState()
     
     BasicTextField(
         value = textFieldValue,
@@ -288,8 +308,11 @@ private fun EditableTextField(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
+            .then(
+                if (!wordWrapEnabled) Modifier.horizontalScroll(horizontalScrollState)
+                else Modifier
+            )
             .padding(horizontal = 8.dp, vertical = 4.dp)
-        // No horizontalScroll = word wrap enabled
     )
 }
 
