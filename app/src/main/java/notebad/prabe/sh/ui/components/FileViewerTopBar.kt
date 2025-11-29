@@ -70,44 +70,49 @@ fun FileViewerTopBar(
 
     TopAppBar(
         title = {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = metadata.displayName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    if (isModified) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "•",
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "${metadata.formattedSize} • ${viewMode.displayName}",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = metadata.displayName,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleSmall
+                )
+                if (isModified) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "•",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = metadata.formattedSize,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
         navigationIcon = {
-            IconButton(onClick = onNavigateBack) {
+            IconButton(onClick = onNavigateBack, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back"
+                    contentDescription = "Back",
+                    modifier = Modifier.size(20.dp)
                 )
             }
         },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        modifier = modifier.height(48.dp), // Compact height
         actions = {
             // View mode toggle
-            IconButton(onClick = { showViewModeMenu = true }) {
+            IconButton(onClick = { showViewModeMenu = true }, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = viewMode.icon,
-                    contentDescription = "Change view mode"
+                    contentDescription = "Change view mode",
+                    modifier = Modifier.size(20.dp)
                 )
 
                 DropdownMenu(
@@ -163,11 +168,13 @@ fun FileViewerTopBar(
             if (viewMode.isEditable && !metadata.isReadOnly) {
                 IconButton(
                     onClick = onSave,
-                    enabled = isModified
+                    enabled = isModified,
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Save,
                         contentDescription = "Save",
+                        modifier = Modifier.size(20.dp),
                         tint = if (isModified) {
                             MaterialTheme.colorScheme.primary
                         } else {
@@ -178,10 +185,11 @@ fun FileViewerTopBar(
             }
 
             // More options menu
-            IconButton(onClick = { showMenu = true }) {
+            IconButton(onClick = { showMenu = true }, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More options"
+                    contentDescription = "More options",
+                    modifier = Modifier.size(20.dp)
                 )
 
                 DropdownMenu(
@@ -200,11 +208,7 @@ fun FileViewerTopBar(
                     )
                 }
             }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        modifier = modifier
+        }
     )
 }
 

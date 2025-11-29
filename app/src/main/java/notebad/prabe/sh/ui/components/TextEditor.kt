@@ -1,20 +1,33 @@
 package notebad.prabe.sh.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +42,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.snipme.highlights.Highlights
 import dev.snipme.highlights.model.BoldHighlight
 import dev.snipme.highlights.model.ColorHighlight
@@ -37,13 +51,14 @@ import dev.snipme.highlights.model.SyntaxThemes
 import notebad.prabe.sh.ui.theme.CodeTextStyle
 
 /**
- * Text editor component with optional syntax highlighting.
+ * Memory-efficient text editor with word wrap, syntax highlighting, and collapsible line numbers.
+ * Uses LazyColumn for large files to prevent OOM crashes.
  *
  * @param text The current text content
  * @param onTextChange Callback when text is modified
  * @param isReadOnly Whether the editor is in read-only mode
- * @param language Optional language for syntax highlighting
- * @param showLineNumbers Whether to show line numbers
+ * @param language Optional language for syntax highlighting (null = plain text mode)
+ * @param showLineNumbers Whether to show line numbers (only for code mode)
  * @param modifier Modifier for the component
  */
 @Composable
@@ -55,25 +70,23 @@ fun TextEditor(
     showLineNumbers: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    val verticalScrollState = rememberScrollState()
-    val horizontalScrollState = rememberScrollState()
-
-    var textFieldValue by remember(text) {
-        mutableStateOf(TextFieldValue(text))
-    }
-
+    // Only show line numbers in code mode (when language is specified)
+    val shouldShowLineNumbers = showLineNumbers && language != null
+    var lineNumbersExpanded by remember { mutableStateOf(true) }
+    
     val lines = remember(text) { text.lines() }
     val lineCount = lines.size
-
+    
+    // Use LazyColumn for large files (>1000 lines) to prevent OOM
+    val useLazyLoading = lineCount > 1000
+    
     Row(modifier = modifier.fillMaxSize()) {
-        // Line numbers column
-        if (showLineNumbers) {
-            LineNumberColumn(
+        // Collapsible line numbers column (only for code mode)
+        if (shouldShowLineNumbers) {
+            CollapsibleLineNumberColumn(
                 lineCount = lineCount,
-                scrollState = verticalScrollState,
-                modifier = Modifier
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    .padding(horizontal = 8.dp)
+                expanded = lineNumbersExpanded,
+                onToggle = { lineNumbersExpanded = !lineNumbersExpanded }
             )
         }
 
@@ -83,44 +96,23 @@ fun TextEditor(
                 .weight(1f)
                 .fillMaxSize()
         ) {
-            if (isReadOnly) {
-                // Read-only view with selection support and syntax highlighting
-                SelectionContainer {
-                    val highlightedText = if (language != null) {
-                        highlightSyntax(text, language)
-                    } else {
-                        AnnotatedString(text)
-                    }
-
-                    Text(
-                        text = highlightedText,
-                        style = CodeTextStyle.copy(
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(verticalScrollState)
-                            .horizontalScroll(horizontalScrollState)
-                            .padding(8.dp)
-                    )
-                }
+            if (useLazyLoading && isReadOnly) {
+                // Large file: Use LazyColumn for memory efficiency
+                LazyTextViewer(
+                    lines = lines,
+                    language = language
+                )
+            } else if (isReadOnly) {
+                // Small file read-only: Regular scrollable text with word wrap
+                ReadOnlyTextViewer(
+                    text = text,
+                    language = language
+                )
             } else {
-                // Editable text field
-                BasicTextField(
-                    value = textFieldValue,
-                    onValueChange = { newValue ->
-                        textFieldValue = newValue
-                        onTextChange(newValue.text)
-                    },
-                    textStyle = CodeTextStyle.copy(
-                        color = MaterialTheme.colorScheme.onSurface
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(verticalScrollState)
-                        .horizontalScroll(horizontalScrollState)
-                        .padding(8.dp)
+                // Editable mode with word wrap
+                EditableTextField(
+                    text = text,
+                    onTextChange = onTextChange
                 )
             }
         }
@@ -128,93 +120,279 @@ fun TextEditor(
 }
 
 /**
- * Line numbers column that syncs with editor scrolling.
+ * Collapsible line number column - compact and expandable.
  */
 @Composable
-private fun LineNumberColumn(
+private fun CollapsibleLineNumberColumn(
     lineCount: Int,
-    scrollState: androidx.compose.foundation.ScrollState,
+    expanded: Boolean,
+    onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val lineNumberWidth = remember(lineCount) {
-        (lineCount.toString().length * 10 + 16).dp
+        (lineCount.toString().length * 8 + 8).dp
     }
-
-    Column(
+    
+    Row(
         modifier = modifier
-            .width(lineNumberWidth)
-            .verticalScroll(scrollState)
-            .padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.End
+            .fillMaxHeight()
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+        verticalAlignment = Alignment.Top
     ) {
-        for (i in 1..lineCount) {
-            Text(
-                text = i.toString(),
-                style = CodeTextStyle.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                )
+        // Toggle button
+        Box(
+            modifier = Modifier
+                .width(16.dp)
+                .fillMaxHeight()
+                .clickable(onClick = onToggle),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ChevronLeft else Icons.Filled.ChevronRight,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.padding(top = 8.dp)
             )
+        }
+        
+        // Line numbers (animated visibility)
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandHorizontally(),
+            exit = shrinkHorizontally()
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(lineNumberWidth)
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 4.dp, horizontal = 4.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+                for (i in 1..lineCount) {
+                    Text(
+                        text = i.toString(),
+                        style = CodeTextStyle.copy(
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    )
+                }
+            }
         }
     }
 }
 
 /**
- * Syntax highlighting using the Highlights library.
- * 
- * Supported languages: C, C++, C#, Dart, Java, Kotlin, Rust, CoffeeScript, JavaScript, 
- * Perl, Python, Ruby, Shell, Swift, TypeScript, Go, PHP.
+ * Memory-efficient lazy text viewer for large files.
+ * Renders only visible lines using LazyColumn.
+ */
+@Composable
+private fun LazyTextViewer(
+    lines: List<String>,
+    language: String?,
+    modifier: Modifier = Modifier
+) {
+    val listState = rememberLazyListState()
+    
+    SelectionContainer {
+        LazyColumn(
+            state = listState,
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            itemsIndexed(
+                items = lines,
+                key = { index, _ -> index }
+            ) { index, line ->
+                val displayLine = if (line.isEmpty()) " " else line
+                Text(
+                    text = if (language != null) {
+                        highlightLine(displayLine, language)
+                    } else {
+                        AnnotatedString(displayLine)
+                    },
+                    style = CodeTextStyle.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    ),
+                    softWrap = true, // Enable word wrap
+                    modifier = Modifier.fillParentMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Read-only text viewer with word wrap for smaller files.
+ */
+@Composable
+private fun ReadOnlyTextViewer(
+    text: String,
+    language: String?,
+    modifier: Modifier = Modifier
+) {
+    val scrollState = rememberScrollState()
+    
+    SelectionContainer {
+        val displayText = if (language != null) {
+            highlightSyntax(text, language)
+        } else {
+            AnnotatedString(text)
+        }
+        
+        Text(
+            text = displayText,
+            style = CodeTextStyle.copy(
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 13.sp,
+                lineHeight = 18.sp
+            ),
+            softWrap = true, // Enable word wrap
+            modifier = modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
+}
+
+/**
+ * Editable text field with word wrap.
+ */
+@Composable
+private fun EditableTextField(
+    text: String,
+    onTextChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var textFieldValue by remember(text) {
+        mutableStateOf(TextFieldValue(text))
+    }
+    val scrollState = rememberScrollState()
+    
+    BasicTextField(
+        value = textFieldValue,
+        onValueChange = { newValue ->
+            textFieldValue = newValue
+            onTextChange(newValue.text)
+        },
+        textStyle = CodeTextStyle.copy(
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 13.sp,
+            lineHeight = 18.sp
+        ),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+        // No horizontalScroll = word wrap enabled
+    )
+}
+
+/**
+ * Highlights a single line for use in LazyColumn.
+ */
+@Composable
+private fun highlightLine(line: String, language: String): AnnotatedString {
+    val syntaxLanguage = mapLanguageToSyntax(language) ?: return AnnotatedString(line)
+    
+    return remember(line, language) {
+        try {
+            val highlights = Highlights.Builder()
+                .code(line)
+                .theme(SyntaxThemes.darcula())
+                .language(syntaxLanguage)
+                .build()
+            
+            buildAnnotatedString {
+                append(line)
+                highlights.getHighlights().forEach { highlight ->
+                    when (highlight) {
+                        is ColorHighlight -> {
+                            if (highlight.location.start < line.length && highlight.location.end <= line.length) {
+                                addStyle(
+                                    style = SpanStyle(color = Color(highlight.rgb).copy(alpha = 1f)),
+                                    start = highlight.location.start,
+                                    end = highlight.location.end
+                                )
+                            }
+                        }
+                        is BoldHighlight -> {
+                            if (highlight.location.start < line.length && highlight.location.end <= line.length) {
+                                addStyle(
+                                    style = SpanStyle(fontWeight = FontWeight.Bold),
+                                    start = highlight.location.start,
+                                    end = highlight.location.end
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            AnnotatedString(line)
+        }
+    }
+}
+
+/**
+ * Syntax highlighting for entire text (used for smaller files).
  */
 @Composable
 private fun highlightSyntax(text: String, language: String): AnnotatedString {
-    val syntaxLanguage = mapLanguageToSyntax(language)
+    val syntaxLanguage = mapLanguageToSyntax(language) ?: return AnnotatedString(text)
     
-    // If language not supported, return plain text
-    if (syntaxLanguage == null) {
-        return AnnotatedString(text)
-    }
-    
-    val highlights = remember(text, language) {
-        Highlights.Builder()
-            .code(text)
-            .theme(SyntaxThemes.darcula())
-            .language(syntaxLanguage)
-            .build()
-    }
-    
-    return buildAnnotatedString {
-        append(text)
-        
-        highlights.getHighlights().forEach { highlight ->
-            when (highlight) {
-                is ColorHighlight -> {
-                    addStyle(
-                        style = SpanStyle(color = Color(highlight.rgb).copy(alpha = 1f)),
-                        start = highlight.location.start,
-                        end = highlight.location.end
-                    )
-                }
-                is BoldHighlight -> {
-                    addStyle(
-                        style = SpanStyle(fontWeight = FontWeight.Bold),
-                        start = highlight.location.start,
-                        end = highlight.location.end
-                    )
+    return remember(text, language) {
+        try {
+            // Limit highlighting to first 100KB for performance
+            val textToHighlight = if (text.length > 100_000) text.take(100_000) else text
+            
+            val highlights = Highlights.Builder()
+                .code(textToHighlight)
+                .theme(SyntaxThemes.darcula())
+                .language(syntaxLanguage)
+                .build()
+            
+            buildAnnotatedString {
+                append(text)
+                highlights.getHighlights().forEach { highlight ->
+                    when (highlight) {
+                        is ColorHighlight -> {
+                            if (highlight.location.end <= text.length) {
+                                addStyle(
+                                    style = SpanStyle(color = Color(highlight.rgb).copy(alpha = 1f)),
+                                    start = highlight.location.start,
+                                    end = highlight.location.end
+                                )
+                            }
+                        }
+                        is BoldHighlight -> {
+                            if (highlight.location.end <= text.length) {
+                                addStyle(
+                                    style = SpanStyle(fontWeight = FontWeight.Bold),
+                                    start = highlight.location.start,
+                                    end = highlight.location.end
+                                )
+                            }
+                        }
+                    }
                 }
             }
+        } catch (e: Exception) {
+            AnnotatedString(text)
         }
     }
 }
 
 /**
  * Maps file extension/language name to SyntaxLanguage enum.
- * 
- * Supported languages by Highlights library:
- * C, C++, C#, Dart, Java, Kotlin, Rust, CoffeeScript, JavaScript, 
- * Perl, Python, Ruby, Shell, Swift, TypeScript, Go, PHP.
  */
 private fun mapLanguageToSyntax(language: String): SyntaxLanguage? {
     return when (language.lowercase()) {
-        // Direct matches
         "kotlin", "kt", "kts" -> SyntaxLanguage.KOTLIN
         "java" -> SyntaxLanguage.JAVA
         "javascript", "js" -> SyntaxLanguage.JAVASCRIPT
@@ -232,21 +410,13 @@ private fun mapLanguageToSyntax(language: String): SyntaxLanguage? {
         "cs", "csharp" -> SyntaxLanguage.CSHARP
         "coffee", "coffeescript" -> SyntaxLanguage.COFFEESCRIPT
         "perl", "pl", "pm" -> SyntaxLanguage.PERL
-        
-        // Use closest match for unsupported languages
-        "scala", "clj", "clojure", "groovy" -> SyntaxLanguage.JAVA  // JVM-family
-        "jsx", "tsx", "vue" -> SyntaxLanguage.JAVASCRIPT  // JS-like
-        "objc", "m", "objective-c" -> SyntaxLanguage.C  // C-like
-        
-        // Use DEFAULT for generic code highlighting
+        "scala", "clj", "clojure", "groovy" -> SyntaxLanguage.JAVA
+        "jsx", "tsx", "vue" -> SyntaxLanguage.JAVASCRIPT
+        "objc", "m", "objective-c" -> SyntaxLanguage.C
         "json", "xml", "html", "xhtml", "svg", "css", "scss", "sass", "less" -> SyntaxLanguage.DEFAULT
         "yaml", "yml", "toml", "ini", "conf", "cfg" -> SyntaxLanguage.DEFAULT
         "sql", "mysql", "postgresql", "sqlite" -> SyntaxLanguage.DEFAULT
         "markdown", "md", "txt", "text" -> SyntaxLanguage.DEFAULT
-        "lua", "r", "matlab", "fortran" -> SyntaxLanguage.DEFAULT
-        "haskell", "hs", "erlang", "erl", "elixir", "ex" -> SyntaxLanguage.DEFAULT
-        
-        // Unknown language - no highlighting
         else -> null
     }
 }

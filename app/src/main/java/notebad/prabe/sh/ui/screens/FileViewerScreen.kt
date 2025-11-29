@@ -106,13 +106,13 @@ fun FileViewerScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier
     ) { paddingValues ->
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            color = MaterialTheme.colorScheme.background
+                .padding(paddingValues)
         ) {
             when (val state = uiState) {
                 is FileViewerUiState.Idle -> {
@@ -253,8 +253,8 @@ private fun TextContentView(
                 text = content.text,
                 onTextChange = onTextChange,
                 isReadOnly = isReadOnly,
-                language = null,
-                showLineNumbers = true,
+                language = null, // No syntax highlighting in text mode
+                showLineNumbers = false, // No line numbers in text mode
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -265,7 +265,7 @@ private fun TextContentView(
                 onTextChange = onTextChange,
                 isReadOnly = isReadOnly,
                 language = content.language,
-                showLineNumbers = true,
+                showLineNumbers = true, // Line numbers only in code mode
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -283,7 +283,7 @@ private fun TextContentView(
                 onTextChange = onTextChange,
                 isReadOnly = isReadOnly,
                 language = "markdown",
-                showLineNumbers = true,
+                showLineNumbers = false, // No line numbers for markdown source
                 modifier = Modifier.fillMaxSize()
             )
         }
