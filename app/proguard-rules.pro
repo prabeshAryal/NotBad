@@ -5,17 +5,52 @@
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Preserve line number information for debugging
+-keepattributes SourceFile,LineNumberTable
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Hide the original source file name
+-renamesourcefileattribute SourceFile
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep Kotlin metadata
+-keepattributes *Annotation*, Signature, Exception
+
+# Keep Kotlin coroutines
+-keepclassmembers class kotlinx.coroutines.** {
+    volatile <fields>;
+}
+-keepclassmembernames class kotlinx.** {
+    volatile <fields>;
+}
+
+# Keep Markwon classes
+-keep class io.noties.markwon.** { *; }
+-dontwarn io.noties.markwon.**
+
+# Keep Prism4j classes
+-keep class io.noties.prism4j.** { *; }
+-dontwarn io.noties.prism4j.**
+
+# Keep Compose classes
+-keep class androidx.compose.** { *; }
+-dontwarn androidx.compose.**
+
+# Keep data classes (models)
+-keep class notebad.prabe.sh.core.model.** { *; }
+
+# Keep ViewModel classes
+-keep class notebad.prabe.sh.ui.viewmodel.** { *; }
+
+# Keep sealed classes for state handling
+-keep class notebad.prabe.sh.ui.state.** { *; }
+
+# General Android rules
+-keep class * extends android.app.Application
+-keep class * extends android.app.Activity
+-keep class * extends android.app.Service
+-keep class * extends android.content.BroadcastReceiver
+-keep class * extends android.content.ContentProvider
+
+# Keep Parcelable implementations
+-keep class * implements android.os.Parcelable {
+    public static final android.os.Parcelable$Creator *;
+}

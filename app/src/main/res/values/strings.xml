@@ -1,3 +1,51 @@
 <resources>
-    <string name="app_name">NoteBad</string>
+    <string name="app_name">Notebad</string>
+    <string name="app_description">Universal File Viewer &amp; Editor</string>
+    
+    <!-- File types -->
+    <string name="file_type_text">Text File</string>
+    <string name="file_type_markdown">Markdown</string>
+    <string name="file_type_code">Source Code</string>
+    <string name="file_type_binary">Binary File</string>
+    <string name="file_type_unknown">Unknown</string>
+    
+    <!-- View modes -->
+    <string name="view_mode_hex">Hex View</string>
+    <string name="view_mode_text">Text</string>
+    <string name="view_mode_code">Code</string>
+    <string name="view_mode_preview">Preview</string>
+    <string name="view_mode_source">Source</string>
+    
+    <!-- Actions -->
+    <string name="action_save">Save</string>
+    <string name="action_reload">Reload</string>
+    <string name="action_open">Open File</string>
+    <string name="action_search">Search</string>
+    <string name="action_share">Share</string>
+    
+    <!-- Messages -->
+    <string name="msg_file_saved">File saved successfully</string>
+    <string name="msg_save_failed">Failed to save file</string>
+    <string name="msg_loading">Loading…</string>
+    <string name="msg_no_file">No file open</string>
+    <string name="msg_open_file_hint">Open a file from another app or use the button below</string>
+    <string name="msg_large_file_warning">Large file: showing partial content</string>
+    
+    <!-- Dialogs -->
+    <string name="dialog_unsaved_title">Unsaved Changes</string>
+    <string name="dialog_unsaved_message">You have unsaved changes. What would you like to do?</string>
+    <string name="dialog_save">Save</string>
+    <string name="dialog_discard">Discard</string>
+    <string name="dialog_cancel">Cancel</string>
+    
+    <!-- Errors -->
+    <string name="error_permission_denied">Permission denied: Cannot access this file</string>
+    <string name="error_file_not_found">File not found</string>
+    <string name="error_read_failed">Failed to read file</string>
+    <string name="error_write_failed">Failed to write file</string>
+    
+    <!-- Hex viewer -->
+    <string name="hex_offset">Offset</string>
+    <string name="hex_ascii">ASCII</string>
+    <string name="hex_lines_format">Lines: %1$d / %2$d</string>
 </resources>
