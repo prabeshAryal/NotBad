@@ -57,10 +57,11 @@ class LargeFileRepository(
         const val NULL_BYTE_THRESHOLD = 1
 
         /**
-         * Maximum file size to attempt full text loading (5MB)
+         * Maximum file size to attempt full text loading (500KB)
          * Files larger than this will be truncated with a warning
+         * Reduced from 5MB to prevent OOM during Compose text rendering
          */
-        const val MAX_FULL_TEXT_LOAD_SIZE = 5 * 1024 * 1024L // 5MB
+        const val MAX_FULL_TEXT_LOAD_SIZE = 500 * 1024L // 500KB
     }
 
     private val contentResolver: ContentResolver = context.contentResolver

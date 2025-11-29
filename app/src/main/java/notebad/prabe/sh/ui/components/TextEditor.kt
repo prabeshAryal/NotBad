@@ -77,11 +77,20 @@ fun TextEditor(
     val shouldShowLineNumbers = showLineNumbers && language != null
     var lineNumbersExpanded by remember { mutableStateOf(true) }
     
-    val lines = remember(text) { text.lines() }
-    val lineCount = lines.size
+    // For memory efficiency, calculate line count without creating a full list for small files
+    val textLength = text.length
     
-    // Use LazyColumn for large files (>1000 lines) to prevent OOM
-    val useLazyLoading = lineCount > 1000
+    // Use LazyColumn for files > 100KB to prevent OOM
+    // Also disable syntax highlighting for very large files (> 200KB)
+    val useLazyLoading = textLength > 100_000
+    val disableSyntaxHighlighting = textLength > 200_000
+    val effectiveLanguage = if (disableSyntaxHighlighting) null else language
+    
+    // Only compute lines list when needed for lazy loading
+    val lines = remember(text, useLazyLoading) {
+        if (useLazyLoading) text.lineSequence().toList() else emptyList()
+    }
+    val lineCount = if (useLazyLoading) lines.size else text.count { it == '\n' } + 1
     
     Row(modifier = modifier.fillMaxSize()) {
         // Collapsible line numbers column (only for code mode)
@@ -103,14 +112,14 @@ fun TextEditor(
                 // Large file: Use LazyColumn for memory efficiency
                 LazyTextViewer(
                     lines = lines,
-                    language = language,
+                    language = effectiveLanguage,
                     wordWrapEnabled = wordWrapEnabled
                 )
             } else if (isReadOnly) {
                 // Small file read-only: Regular scrollable text with word wrap
                 ReadOnlyTextViewer(
                     text = text,
-                    language = language,
+                    language = effectiveLanguage,
                     wordWrapEnabled = wordWrapEnabled
                 )
             } else {
@@ -356,6 +365,9 @@ private fun highlightLine(line: String, language: String): AnnotatedString {
                     }
                 }
             }
+        } catch (e: OutOfMemoryError) {
+            // Fallback to plain text on OOM
+            AnnotatedString(line)
         } catch (e: Exception) {
             AnnotatedString(line)
         }
@@ -371,8 +383,8 @@ private fun highlightSyntax(text: String, language: String): AnnotatedString {
     
     return remember(text, language) {
         try {
-            // Limit highlighting to first 100KB for performance
-            val textToHighlight = if (text.length > 100_000) text.take(100_000) else text
+            // Limit highlighting to first 50KB for performance and memory safety
+            val textToHighlight = if (text.length > 50_000) text.take(50_000) else text
             
             val highlights = Highlights.Builder()
                 .code(textToHighlight)
@@ -405,6 +417,9 @@ private fun highlightSyntax(text: String, language: String): AnnotatedString {
                     }
                 }
             }
+        } catch (e: OutOfMemoryError) {
+            // Fallback to plain text on OOM
+            AnnotatedString(text)
         } catch (e: Exception) {
             AnnotatedString(text)
         }
