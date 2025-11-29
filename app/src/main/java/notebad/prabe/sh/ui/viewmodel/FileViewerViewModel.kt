@@ -110,6 +110,8 @@ class FileViewerViewModel(
             is FileViewerEvent.ReloadFile -> reloadFile()
             is FileViewerEvent.ToggleMarkdownPreview -> toggleMarkdownPreview()
             is FileViewerEvent.ToggleWordWrap -> toggleWordWrap()
+            is FileViewerEvent.ToggleSearch -> toggleSearch()
+            is FileViewerEvent.UpdateSearchQuery -> updateSearchQuery(event.query)
             is FileViewerEvent.Search -> performSearch(event.query)
             is FileViewerEvent.CloseFile -> closeFile()
         }
@@ -338,6 +340,39 @@ class FileViewerViewModel(
         _uiState.value = state.copy(
             contentState = textContent.copy(
                 isWordWrapEnabled = !textContent.isWordWrapEnabled
+            )
+        )
+    }
+
+    /**
+     * Toggles search visibility.
+     */
+    private fun toggleSearch() {
+        val state = _uiState.value
+        if (state !is FileViewerUiState.Loaded) return
+        if (state.contentState !is ContentState.TextContent) return
+
+        val textContent = state.contentState as ContentState.TextContent
+        _uiState.value = state.copy(
+            contentState = textContent.copy(
+                isSearchVisible = !textContent.isSearchVisible,
+                searchQuery = if (textContent.isSearchVisible) "" else textContent.searchQuery
+            )
+        )
+    }
+
+    /**
+     * Updates the search query.
+     */
+    private fun updateSearchQuery(query: String) {
+        val state = _uiState.value
+        if (state !is FileViewerUiState.Loaded) return
+        if (state.contentState !is ContentState.TextContent) return
+
+        val textContent = state.contentState as ContentState.TextContent
+        _uiState.value = state.copy(
+            contentState = textContent.copy(
+                searchQuery = query
             )
         )
     }

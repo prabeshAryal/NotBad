@@ -24,7 +24,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.flow.collectLatest
 import notebad.prabe.sh.core.io.LargeFileRepository
-import notebad.prabe.sh.ui.components.CodeViewer
 import notebad.prabe.sh.ui.components.EmptyState
 import notebad.prabe.sh.ui.components.ErrorScreen
 import notebad.prabe.sh.ui.components.FileViewerTopBar
@@ -178,7 +177,8 @@ private fun FileViewerContent(
             onSave = { onEvent(FileViewerEvent.SaveFile) },
             onReload = { onEvent(FileViewerEvent.ReloadFile) },
             onViewModeChange = { onEvent(FileViewerEvent.ChangeViewMode(it)) },
-            onToggleWordWrap = { onEvent(FileViewerEvent.ToggleWordWrap) }
+            onToggleWordWrap = { onEvent(FileViewerEvent.ToggleWordWrap) },
+            onToggleSearch = { onEvent(FileViewerEvent.ToggleSearch) }
         )
 
         // Truncation warning if applicable
@@ -216,7 +216,9 @@ private fun FileViewerContent(
                         isReadOnly = state.metadata.isReadOnly,
                         wordWrapEnabled = wordWrapEnabled,
                         onTextChange = { onEvent(FileViewerEvent.TextChanged(it)) },
-                        onTogglePreview = { onEvent(FileViewerEvent.ToggleMarkdownPreview) }
+                        onTogglePreview = { onEvent(FileViewerEvent.ToggleMarkdownPreview) },
+                        onSearchQueryChange = { onEvent(FileViewerEvent.UpdateSearchQuery(it)) },
+                        onToggleSearch = { onEvent(FileViewerEvent.ToggleSearch) }
                     )
                 }
 
@@ -246,7 +248,9 @@ private fun TextContentView(
     isReadOnly: Boolean,
     wordWrapEnabled: Boolean,
     onTextChange: (String) -> Unit,
-    onTogglePreview: () -> Unit
+    onTogglePreview: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onToggleSearch: () -> Unit
 ) {
     when (viewMode) {
         ViewMode.HEX -> {
@@ -262,9 +266,13 @@ private fun TextContentView(
                 text = content.text,
                 onTextChange = onTextChange,
                 isReadOnly = isReadOnly,
-                language = null, // No syntax highlighting in text mode
-                showLineNumbers = false, // No line numbers in text mode
+                language = null,
+                showLineNumbers = false,
                 wordWrapEnabled = wordWrapEnabled,
+                searchQuery = content.searchQuery,
+                onSearchQueryChange = onSearchQueryChange,
+                showSearch = content.isSearchVisible,
+                onToggleSearch = onToggleSearch,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -275,8 +283,12 @@ private fun TextContentView(
                 onTextChange = onTextChange,
                 isReadOnly = isReadOnly,
                 language = content.language,
-                showLineNumbers = true, // Line numbers only in code mode
+                showLineNumbers = true,
                 wordWrapEnabled = wordWrapEnabled,
+                searchQuery = content.searchQuery,
+                onSearchQueryChange = onSearchQueryChange,
+                showSearch = content.isSearchVisible,
+                onToggleSearch = onToggleSearch,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -294,8 +306,12 @@ private fun TextContentView(
                 onTextChange = onTextChange,
                 isReadOnly = isReadOnly,
                 language = "markdown",
-                showLineNumbers = false, // No line numbers for markdown source
+                showLineNumbers = false,
                 wordWrapEnabled = wordWrapEnabled,
+                searchQuery = content.searchQuery,
+                onSearchQueryChange = onSearchQueryChange,
+                showSearch = content.isSearchVisible,
+                onToggleSearch = onToggleSearch,
                 modifier = Modifier.fillMaxSize()
             )
         }

@@ -1,18 +1,9 @@
 package notebad.prabe.sh.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.WrapText
@@ -25,6 +16,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Preview
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,17 +41,7 @@ import notebad.prabe.sh.core.model.FileMetadata
 import notebad.prabe.sh.ui.state.ViewMode
 
 /**
- * Top app bar for the file viewer.
- *
- * @param metadata File metadata to display
- * @param viewMode Current view mode
- * @param isModified Whether the file has unsaved changes
- * @param wordWrapEnabled Whether word wrap is enabled
- * @param onNavigateBack Callback for back navigation
- * @param onSave Callback to save the file
- * @param onReload Callback to reload the file
- * @param onViewModeChange Callback to change view mode
- * @param onToggleWordWrap Callback to toggle word wrap
+ * Compact top app bar for the file viewer.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,6 +55,7 @@ fun FileViewerTopBar(
     onReload: () -> Unit,
     onViewModeChange: (ViewMode) -> Unit,
     onToggleWordWrap: () -> Unit = {},
+    onToggleSearch: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -81,47 +64,60 @@ fun FileViewerTopBar(
     TopAppBar(
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Truncated filename with ellipsis
                 Text(
-                    text = metadata.displayName,
+                    text = truncateFilename(metadata.displayName, 20),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleSmall
                 )
                 if (isModified) {
-                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "•",
+                        text = " •",
                         color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleSmall
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = metadata.formattedSize,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         },
         navigationIcon = {
-            IconButton(onClick = onNavigateBack) {
+            IconButton(
+                onClick = onNavigateBack,
+                modifier = Modifier.size(40.dp)
+            ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back"
+                    contentDescription = "Back",
+                    modifier = Modifier.size(20.dp)
                 )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        windowInsets = WindowInsets.statusBars, // Handle status bar / camera hole
         modifier = modifier,
         actions = {
+            // Search button
+            IconButton(
+                onClick = onToggleSearch,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Search",
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            
             // View mode toggle
-            IconButton(onClick = { showViewModeMenu = true }) {
+            IconButton(
+                onClick = { showViewModeMenu = true },
+                modifier = Modifier.size(36.dp)
+            ) {
                 Icon(
                     imageVector = viewMode.icon,
-                    contentDescription = "Change view mode"
+                    contentDescription = "Change view mode",
+                    modifier = Modifier.size(18.dp)
                 )
 
                 DropdownMenu(
@@ -177,11 +173,13 @@ fun FileViewerTopBar(
             if (viewMode.isEditable && !metadata.isReadOnly) {
                 IconButton(
                     onClick = onSave,
-                    enabled = isModified
+                    enabled = isModified,
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Save,
                         contentDescription = "Save",
+                        modifier = Modifier.size(18.dp),
                         tint = if (isModified) {
                             MaterialTheme.colorScheme.primary
                         } else {
@@ -192,10 +190,14 @@ fun FileViewerTopBar(
             }
 
             // More options menu
-            IconButton(onClick = { showMenu = true }) {
+            IconButton(
+                onClick = { showMenu = true },
+                modifier = Modifier.size(36.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More options"
+                    contentDescription = "More options",
+                    modifier = Modifier.size(18.dp)
                 )
 
                 DropdownMenu(
@@ -239,6 +241,25 @@ fun FileViewerTopBar(
     )
 }
 
+/**
+ * Truncate filename with ellipsis in middle
+ */
+private fun truncateFilename(name: String, maxLength: Int): String {
+    if (name.length <= maxLength) return name
+    val extension = name.substringAfterLast('.', "")
+    val baseName = if (extension.isNotEmpty()) name.substringBeforeLast('.') else name
+    
+    val availableLength = maxLength - extension.length - 4 // 4 for "..." and "."
+    if (availableLength < 4) return name.take(maxLength - 3) + "..."
+    
+    val half = availableLength / 2
+    return if (extension.isNotEmpty()) {
+        "${baseName.take(half)}...${baseName.takeLast(half)}.$extension"
+    } else {
+        "${baseName.take(half)}...${baseName.takeLast(half)}"
+    }
+}
+
 @Composable
 private fun ViewModeMenuItem(
     mode: ViewMode,
@@ -276,7 +297,7 @@ private fun ViewModeMenuItem(
  */
 val ViewMode.displayName: String
     get() = when (this) {
-        ViewMode.HEX -> "Hex View"
+        ViewMode.HEX -> "Hex"
         ViewMode.TEXT -> "Text"
         ViewMode.CODE -> "Code"
         ViewMode.MARKDOWN_PREVIEW -> "Preview"

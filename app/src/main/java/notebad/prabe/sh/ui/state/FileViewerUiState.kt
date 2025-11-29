@@ -87,7 +87,9 @@ sealed interface ContentState {
         val language: String? = null,
         val isTruncated: Boolean = false,
         val totalSize: Long = 0,
-        val isWordWrapEnabled: Boolean = true
+        val isWordWrapEnabled: Boolean = true,
+        val isSearchVisible: Boolean = false,
+        val searchQuery: String = ""
     ) : ContentState
 
     /**
@@ -146,6 +148,16 @@ sealed interface FileViewerEvent {
      * User toggled word wrap
      */
     data object ToggleWordWrap : FileViewerEvent
+
+    /**
+     * User toggled search visibility
+     */
+    data object ToggleSearch : FileViewerEvent
+
+    /**
+     * User changed search query
+     */
+    data class UpdateSearchQuery(val query: String) : FileViewerEvent
 
     /**
      * User searched for text/hex
