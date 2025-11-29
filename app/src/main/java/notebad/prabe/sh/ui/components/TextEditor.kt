@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -22,21 +21,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import dev.snipme.highlights.Highlights
+import dev.snipme.highlights.model.BoldHighlight
+import dev.snipme.highlights.model.ColorHighlight
+import dev.snipme.highlights.model.SyntaxLanguage
+import dev.snipme.highlights.model.SyntaxThemes
 import notebad.prabe.sh.ui.theme.CodeTextStyle
-import notebad.prabe.sh.ui.theme.MonospaceFamily
-import notebad.prabe.sh.ui.theme.SyntaxComment
-import notebad.prabe.sh.ui.theme.SyntaxFunction
-import notebad.prabe.sh.ui.theme.SyntaxKeyword
-import notebad.prabe.sh.ui.theme.SyntaxNumber
-import notebad.prabe.sh.ui.theme.SyntaxString
 
 /**
  * Text editor component with optional syntax highlighting.
@@ -86,7 +84,7 @@ fun TextEditor(
                 .fillMaxSize()
         ) {
             if (isReadOnly) {
-                // Read-only view with selection support
+                // Read-only view with selection support and syntax highlighting
                 SelectionContainer {
                     val highlightedText = if (language != null) {
                         highlightSyntax(text, language)
@@ -161,136 +159,95 @@ private fun LineNumberColumn(
 }
 
 /**
- * Simple syntax highlighting for common patterns.
- * This is a basic implementation - for production, use a proper lexer.
+ * Syntax highlighting using the Highlights library.
+ * 
+ * Supported languages: C, C++, C#, Dart, Java, Kotlin, Rust, CoffeeScript, JavaScript, 
+ * Perl, Python, Ruby, Shell, Swift, TypeScript, Go, PHP.
  */
 @Composable
 private fun highlightSyntax(text: String, language: String): AnnotatedString {
-    // Keywords for various languages
-    val keywords = when (language.lowercase()) {
-        "kotlin", "kt" -> setOf(
-            "fun", "val", "var", "class", "object", "interface", "sealed",
-            "data", "enum", "when", "if", "else", "for", "while", "do",
-            "return", "break", "continue", "throw", "try", "catch", "finally",
-            "import", "package", "private", "public", "protected", "internal",
-            "open", "abstract", "override", "suspend", "inline", "infix",
-            "operator", "companion", "init", "constructor", "this", "super",
-            "null", "true", "false", "is", "as", "in", "out", "by", "where"
-        )
-        "java" -> setOf(
-            "public", "private", "protected", "class", "interface", "enum",
-            "extends", "implements", "static", "final", "abstract", "void",
-            "int", "long", "double", "float", "boolean", "char", "byte", "short",
-            "if", "else", "for", "while", "do", "switch", "case", "default",
-            "return", "break", "continue", "throw", "try", "catch", "finally",
-            "new", "this", "super", "null", "true", "false", "instanceof",
-            "import", "package", "throws", "synchronized", "volatile", "transient"
-        )
-        "javascript", "js", "typescript", "ts" -> setOf(
-            "function", "const", "let", "var", "class", "extends", "implements",
-            "if", "else", "for", "while", "do", "switch", "case", "default",
-            "return", "break", "continue", "throw", "try", "catch", "finally",
-            "new", "this", "super", "null", "undefined", "true", "false",
-            "import", "export", "from", "async", "await", "yield", "typeof",
-            "instanceof", "delete", "void", "interface", "type", "enum"
-        )
-        "python", "py" -> setOf(
-            "def", "class", "if", "elif", "else", "for", "while", "try",
-            "except", "finally", "with", "as", "import", "from", "return",
-            "yield", "break", "continue", "pass", "raise", "lambda", "and",
-            "or", "not", "in", "is", "True", "False", "None", "global",
-            "nonlocal", "assert", "del", "async", "await"
-        )
-        else -> emptySet()
+    val syntaxLanguage = mapLanguageToSyntax(language)
+    
+    // If language not supported, return plain text
+    if (syntaxLanguage == null) {
+        return AnnotatedString(text)
     }
-
+    
+    val highlights = remember(text, language) {
+        Highlights.Builder()
+            .code(text)
+            .theme(SyntaxThemes.darcula())
+            .language(syntaxLanguage)
+            .build()
+    }
+    
     return buildAnnotatedString {
-        var i = 0
-        val length = text.length
-
-        while (i < length) {
-            when {
-                // String literals (double quotes)
-                text[i] == '"' -> {
-                    val start = i
-                    i++
-                    while (i < length && text[i] != '"') {
-                        if (text[i] == '\\' && i + 1 < length) i++
-                        i++
-                    }
-                    if (i < length) i++
-                    withStyle(SpanStyle(color = SyntaxString)) {
-                        append(text.substring(start, i))
-                    }
+        append(text)
+        
+        highlights.getHighlights().forEach { highlight ->
+            when (highlight) {
+                is ColorHighlight -> {
+                    addStyle(
+                        style = SpanStyle(color = Color(highlight.rgb).copy(alpha = 1f)),
+                        start = highlight.location.start,
+                        end = highlight.location.end
+                    )
                 }
-
-                // String literals (single quotes)
-                text[i] == '\'' -> {
-                    val start = i
-                    i++
-                    while (i < length && text[i] != '\'') {
-                        if (text[i] == '\\' && i + 1 < length) i++
-                        i++
-                    }
-                    if (i < length) i++
-                    withStyle(SpanStyle(color = SyntaxString)) {
-                        append(text.substring(start, i))
-                    }
-                }
-
-                // Single-line comments
-                text[i] == '/' && i + 1 < length && text[i + 1] == '/' -> {
-                    val start = i
-                    while (i < length && text[i] != '\n') i++
-                    withStyle(SpanStyle(color = SyntaxComment)) {
-                        append(text.substring(start, i))
-                    }
-                }
-
-                // Python comments
-                text[i] == '#' && language in listOf("python", "py") -> {
-                    val start = i
-                    while (i < length && text[i] != '\n') i++
-                    withStyle(SpanStyle(color = SyntaxComment)) {
-                        append(text.substring(start, i))
-                    }
-                }
-
-                // Numbers
-                text[i].isDigit() -> {
-                    val start = i
-                    while (i < length && (text[i].isDigit() || text[i] == '.' || text[i] == 'x' || text[i] in 'a'..'f' || text[i] in 'A'..'F')) {
-                        i++
-                    }
-                    withStyle(SpanStyle(color = SyntaxNumber)) {
-                        append(text.substring(start, i))
-                    }
-                }
-
-                // Identifiers/Keywords
-                text[i].isLetter() || text[i] == '_' -> {
-                    val start = i
-                    while (i < length && (text[i].isLetterOrDigit() || text[i] == '_')) {
-                        i++
-                    }
-                    val word = text.substring(start, i)
-                    val style = if (word in keywords) {
-                        SpanStyle(color = SyntaxKeyword)
-                    } else {
-                        SpanStyle(color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    withStyle(style) {
-                        append(word)
-                    }
-                }
-
-                // Default: append character as-is
-                else -> {
-                    append(text[i])
-                    i++
+                is BoldHighlight -> {
+                    addStyle(
+                        style = SpanStyle(fontWeight = FontWeight.Bold),
+                        start = highlight.location.start,
+                        end = highlight.location.end
+                    )
                 }
             }
         }
+    }
+}
+
+/**
+ * Maps file extension/language name to SyntaxLanguage enum.
+ * 
+ * Supported languages by Highlights library:
+ * C, C++, C#, Dart, Java, Kotlin, Rust, CoffeeScript, JavaScript, 
+ * Perl, Python, Ruby, Shell, Swift, TypeScript, Go, PHP.
+ */
+private fun mapLanguageToSyntax(language: String): SyntaxLanguage? {
+    return when (language.lowercase()) {
+        // Direct matches
+        "kotlin", "kt", "kts" -> SyntaxLanguage.KOTLIN
+        "java" -> SyntaxLanguage.JAVA
+        "javascript", "js" -> SyntaxLanguage.JAVASCRIPT
+        "typescript", "ts" -> SyntaxLanguage.TYPESCRIPT
+        "python", "py" -> SyntaxLanguage.PYTHON
+        "c", "h" -> SyntaxLanguage.C
+        "cpp", "cc", "cxx", "hpp", "c++" -> SyntaxLanguage.CPP
+        "rust", "rs" -> SyntaxLanguage.RUST
+        "go" -> SyntaxLanguage.GO
+        "swift" -> SyntaxLanguage.SWIFT
+        "php" -> SyntaxLanguage.PHP
+        "ruby", "rb" -> SyntaxLanguage.RUBY
+        "shell", "sh", "bash", "zsh", "bsh", "csh" -> SyntaxLanguage.SHELL
+        "dart" -> SyntaxLanguage.DART
+        "cs", "csharp" -> SyntaxLanguage.CSHARP
+        "coffee", "coffeescript" -> SyntaxLanguage.COFFEESCRIPT
+        "perl", "pl", "pm" -> SyntaxLanguage.PERL
+        
+        // Use closest match for unsupported languages
+        "scala", "clj", "clojure", "groovy" -> SyntaxLanguage.JAVA  // JVM-family
+        "jsx", "tsx", "vue" -> SyntaxLanguage.JAVASCRIPT  // JS-like
+        "objc", "m", "objective-c" -> SyntaxLanguage.C  // C-like
+        
+        // Use DEFAULT for generic code highlighting
+        "json", "xml", "html", "xhtml", "svg", "css", "scss", "sass", "less" -> SyntaxLanguage.DEFAULT
+        "yaml", "yml", "toml", "ini", "conf", "cfg" -> SyntaxLanguage.DEFAULT
+        "sql", "mysql", "postgresql", "sqlite" -> SyntaxLanguage.DEFAULT
+        "markdown", "md", "txt", "text" -> SyntaxLanguage.DEFAULT
+        "lua", "r", "matlab", "fortran" -> SyntaxLanguage.DEFAULT
+        "haskell", "hs", "erlang", "erl", "elixir", "ex" -> SyntaxLanguage.DEFAULT
+        
+        // Unknown language - no highlighting
+        else -> null
     }
 }
 

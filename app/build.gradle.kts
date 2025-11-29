@@ -102,7 +102,9 @@ dependencies {
     implementation(libs.markwon.ext.tasklist)
     implementation(libs.markwon.html)
     implementation(libs.markwon.linkify)
-    // Note: markwon.syntax.highlight removed - using custom syntax highlighting
+
+    // Highlights syntax highlighting (KMP library)
+    implementation(libs.highlights)
 
     // Testing
     testImplementation(libs.junit)

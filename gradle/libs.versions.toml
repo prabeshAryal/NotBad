@@ -1,6 +1,6 @@
 [versions]
 agp = "8.10.0"
-kotlin = "2.0.21"
+kotlin = "2.2.0"
 coreKtx = "1.15.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -20,11 +20,8 @@ coroutines = "1.9.0"
 # Markdown (Markwon)
 markwon = "4.6.2"
 
-# Syntax Highlighting
-highlightjs = "1.0.0"
-
-# KSP for annotation processing
-ksp = "2.0.21-1.0.27"
+# Syntax Highlighting (Highlights by SnipMe)
+highlights = "1.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -72,13 +69,11 @@ markwon-html = { group = "io.noties.markwon", name = "html", version.ref = "mark
 markwon-linkify = { group = "io.noties.markwon", name = "linkify", version.ref = "markwon" }
 markwon-syntax-highlight = { group = "io.noties.markwon", name = "syntax-highlight", version.ref = "markwon" }
 
-# Prism4j for syntax highlighting with Markwon
-prism4j = { group = "io.noties", name = "prism4j", version = "2.0.0" }
-prism4j-bundler = { group = "io.noties", name = "prism4j-bundler", version = "2.0.0" }
+# Highlights syntax highlighting library
+highlights = { group = "dev.snipme", name = "highlights", version.ref = "highlights" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
