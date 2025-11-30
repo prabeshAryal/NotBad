@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Notebad</string>
+    <string name="app_name">NotBad</string>
     <string name="app_description">Universal File Viewer &amp; Editor</string>
     
     <!-- File types -->

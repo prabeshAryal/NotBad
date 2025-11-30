@@ -10,7 +10,7 @@
         tools:ignore="ScopedStorage" />
 
     <application
-        android:name=".NotebadApplication"
+        android:name=".NotbadApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -18,7 +18,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.NoteBad"
+        android:theme="@style/Theme.NotBad"
         android:largeHeap="true"
         tools:targetApi="31">
 
@@ -29,7 +29,7 @@
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:windowSoftInputMode="adjustResize"
             android:launchMode="singleTask"
-            android:theme="@style/Theme.NoteBad">
+            android:theme="@style/Theme.NotBad">
 
             <!-- Standard launcher entry -->
             <intent-filter>

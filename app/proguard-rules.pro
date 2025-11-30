@@ -35,13 +35,13 @@
 -dontwarn androidx.compose.**
 
 # Keep data classes (models)
--keep class notebad.prabe.sh.core.model.** { *; }
+-keep class notbad.prabe.sh.core.model.** { *; }
 
 # Keep ViewModel classes
--keep class notebad.prabe.sh.ui.viewmodel.** { *; }
+-keep class notbad.prabe.sh.ui.viewmodel.** { *; }
 
 # Keep sealed classes for state handling
--keep class notebad.prabe.sh.ui.state.** { *; }
+-keep class notbad.prabe.sh.ui.state.** { *; }
 
 # General Android rules
 -keep class * extends android.app.Application

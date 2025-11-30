@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "notebad.prabe.sh"
+    namespace = "notbad.prabe.sh"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "notebad.prabe.sh"
+        applicationId = "notbad.prabe.sh"
         minSdk = 24
         targetSdk = 35
         versionCode = 1

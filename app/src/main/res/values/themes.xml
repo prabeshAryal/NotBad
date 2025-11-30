@@ -1,6 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme using Material3 -->
-    <style name="Theme.NoteBad" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.NotBad" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Primary brand color. -->
         <item name="colorPrimary">@color/purple_500</item>
         <item name="colorPrimaryContainer">@color/purple_700</item>
