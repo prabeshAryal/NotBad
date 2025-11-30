@@ -1,9 +1,7 @@
 package notbad.prabe.sh.ui.components
 
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.WrapText
@@ -12,6 +10,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DataObject
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Preview
 import androidx.compose.material.icons.filled.Refresh
@@ -20,6 +19,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +56,7 @@ fun FileViewerTopBar(
     onViewModeChange: (ViewMode) -> Unit,
     onToggleWordWrap: () -> Unit = {},
     onToggleSearch: () -> Unit = {},
+    onShowFileInfo: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -233,6 +234,20 @@ fun FileViewerTopBar(
                         },
                         leadingIcon = {
                             Icon(Icons.Default.Refresh, contentDescription = null)
+                        }
+                    )
+                    
+                    HorizontalDivider()
+                    
+                    // File Info
+                    DropdownMenuItem(
+                        text = { Text("File Info") },
+                        onClick = {
+                            onShowFileInfo()
+                            showMenu = false
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.Info, contentDescription = null)
                         }
                     )
                 }

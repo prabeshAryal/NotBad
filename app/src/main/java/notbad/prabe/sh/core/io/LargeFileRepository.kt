@@ -4,7 +4,6 @@ import android.content.ContentResolver
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
-import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -62,6 +61,17 @@ class LargeFileRepository(
          * Reduced from 5MB to prevent OOM during Compose text rendering
          */
         const val MAX_FULL_TEXT_LOAD_SIZE = 500 * 1024L // 500KB
+        
+        /**
+         * Maximum file size for ANY text loading - no limit for JSON/text files
+         * We load ALL text files, but disable syntax highlighting for large ones
+         */
+        const val ABSOLUTE_MAX_TEXT_SIZE = 50 * 1024 * 1024L // 50MB
+        
+        /**
+         * Chunk size for progressive loading
+         */
+        const val PROGRESSIVE_CHUNK_SIZE = 64 * 1024 // 64KB
     }
 
     private val contentResolver: ContentResolver = context.contentResolver
@@ -254,6 +264,69 @@ class LargeFileRepository(
 
             val result = readRange(uri, 0, bytesToRead)
             result.getOrThrow().toString(charset)
+        }
+    }
+    
+    /**
+     * Reads text content progressively with progress callback.
+     * Loads full file content without size limits, suitable for JSON and text files.
+     * Reports progress via callback for UI updates.
+     *
+     * @param uri The file URI
+     * @param onProgress Callback with (loadedBytes, totalBytes, progress 0.0-1.0)
+     * @param charset Character encoding (default UTF-8)
+     * @return Result containing the full text content or an error
+     */
+    suspend fun readTextContentProgressive(
+        uri: Uri,
+        onProgress: suspend (loadedBytes: Long, totalBytes: Long, progress: Float) -> Unit,
+        charset: java.nio.charset.Charset = Charsets.UTF_8
+    ): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val fileSize = getFileSize(uri)
+            
+            // For very small files, just read directly
+            if (fileSize <= PROGRESSIVE_CHUNK_SIZE) {
+                onProgress(fileSize, fileSize, 1f)
+                return@runCatching readRange(uri, 0, fileSize.toInt()).getOrThrow().toString(charset)
+            }
+            
+            // Cap at absolute max to prevent true OOM
+            val maxBytes = minOf(fileSize, ABSOLUTE_MAX_TEXT_SIZE)
+            
+            val stringBuilder = StringBuilder((maxBytes / 2).toInt()) // Estimate initial capacity
+            var bytesLoaded = 0L
+            var offset = 0L
+            
+            contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                FileInputStream(pfd.fileDescriptor).use { fis ->
+                    fis.channel.use { channel ->
+                        while (offset < maxBytes) {
+                            val bytesToRead = minOf(PROGRESSIVE_CHUNK_SIZE.toLong(), maxBytes - offset).toInt()
+                            val buffer = ByteBuffer.allocate(bytesToRead)
+                            
+                            channel.position(offset)
+                            val bytesRead = channel.read(buffer)
+                            
+                            if (bytesRead <= 0) break
+                            
+                            buffer.flip()
+                            val data = ByteArray(bytesRead)
+                            buffer.get(data)
+                            
+                            stringBuilder.append(data.toString(charset))
+                            
+                            bytesLoaded += bytesRead
+                            offset += bytesRead
+                            
+                            val progress = (bytesLoaded.toFloat() / maxBytes).coerceIn(0f, 1f)
+                            onProgress(bytesLoaded, maxBytes, progress)
+                        }
+                    }
+                }
+            } ?: throw IllegalStateException("Unable to open file descriptor for URI: $uri")
+            
+            stringBuilder.toString()
         }
     }
 

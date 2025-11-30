@@ -19,7 +19,6 @@ import notbad.prabe.sh.core.model.FileMetadata
 import notbad.prabe.sh.core.model.HexLine
 import notbad.prabe.sh.core.usecase.LoadHexPageUseCase
 import notbad.prabe.sh.core.usecase.OpenFileUseCase
-import notbad.prabe.sh.core.usecase.ReadTextContentUseCase
 import notbad.prabe.sh.core.usecase.SaveTextContentUseCase
 import notbad.prabe.sh.ui.state.ContentState
 import notbad.prabe.sh.ui.state.FileViewerEffect
@@ -45,7 +44,6 @@ class FileViewerViewModel(
 
     // Use cases
     private val openFileUseCase = OpenFileUseCase(repository)
-    private val readTextContentUseCase = ReadTextContentUseCase(repository)
     private val saveTextContentUseCase = SaveTextContentUseCase(repository)
     private val loadHexPageUseCase = LoadHexPageUseCase(repository)
 
@@ -114,6 +112,7 @@ class FileViewerViewModel(
             is FileViewerEvent.UpdateSearchQuery -> updateSearchQuery(event.query)
             is FileViewerEvent.Search -> performSearch(event.query)
             is FileViewerEvent.CloseFile -> closeFile()
+            is FileViewerEvent.ShowFileInfo -> showFileInfo()
         }
     }
 
@@ -144,20 +143,39 @@ class FileViewerViewModel(
     }
 
     /**
-     * Loads text content from the file.
+     * Loads text content from the file with progressive loading for large files.
      */
     private suspend fun loadTextContent(metadata: FileMetadata, viewMode: ViewMode) {
         _uiState.value = FileViewerUiState.Loaded(
             metadata = metadata,
             viewMode = viewMode,
-            contentState = ContentState.Loading
+            contentState = ContentState.Loading(
+                progress = 0f,
+                loadedBytes = 0,
+                totalBytes = metadata.size
+            )
         )
 
         currentUri?.let { uri ->
-            readTextContentUseCase(uri)
-                .onSuccess { text ->
+            // Use progressive loading for all files
+            repository.readTextContentProgressive(
+                uri = uri,
+                onProgress = { loadedBytes, totalBytes, progress ->
+                    // Update progress in UI
+                    val currentState = _uiState.value
+                    if (currentState is FileViewerUiState.Loaded) {
+                        _uiState.value = currentState.copy(
+                            contentState = ContentState.Loading(
+                                progress = progress,
+                                loadedBytes = loadedBytes,
+                                totalBytes = totalBytes
+                            )
+                        )
+                    }
+                }
+            ).onSuccess { text ->
                     originalTextContent = text
-                    val isTruncated = metadata.size > LargeFileRepository.MAX_FULL_TEXT_LOAD_SIZE
+                    val isTruncated = metadata.size > LargeFileRepository.ABSOLUTE_MAX_TEXT_SIZE
 
                     val language = determineLanguage(metadata)
 
@@ -190,7 +208,11 @@ class FileViewerViewModel(
         _uiState.value = FileViewerUiState.Loaded(
             metadata = metadata,
             viewMode = ViewMode.HEX,
-            contentState = ContentState.Loading
+            contentState = ContentState.Loading(
+                progress = 0f,
+                loadedBytes = 0,
+                totalBytes = metadata.size
+            )
         )
 
         currentUri?.let { uri ->
@@ -494,7 +516,22 @@ class FileViewerViewModel(
             "ps1" -> "powershell"
             "md", "markdown" -> "markdown"
             "gradle" -> "groovy"
+            "dart" -> "dart"
+            "pl", "pm" -> "perl"
+            "coffee" -> "coffeescript"
+            "cs" -> "csharp"
             else -> null
+        }
+    }
+    
+    /**
+     * Shows file info dialog.
+     */
+    private fun showFileInfo() {
+        currentMetadata?.let { metadata ->
+            viewModelScope.launch {
+                _effects.emit(FileViewerEffect.ShowFileInfo(metadata))
+            }
         }
     }
 

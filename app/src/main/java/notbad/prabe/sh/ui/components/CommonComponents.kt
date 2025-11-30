@@ -58,6 +58,65 @@ fun LoadingScreen(
 }
 
 /**
+ * Loading screen with progress percentage.
+ *
+ * @param progress Progress value from 0f to 1f
+ * @param loadedBytes Bytes loaded so far
+ * @param totalBytes Total bytes to load
+ * @param modifier Modifier for the component
+ */
+@Composable
+fun LoadingScreenWithProgress(
+    progress: Float,
+    loadedBytes: Long,
+    totalBytes: Long,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Circular progress with percentage in center
+            Box(contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.size(80.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    strokeWidth = 6.dp
+                )
+                
+                Text(
+                    text = "${(progress * 100).toInt()}%",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Loading file...",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            Text(
+                text = "${formatSize(loadedBytes)} / ${formatSize(totalBytes)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        }
+    }
+}
+
+/**
  * Full-screen error state.
  *
  * @param message Error message to display
@@ -206,3 +265,8 @@ private fun formatSize(bytes: Long): String {
     val gb = mb / 1024.0
     return "%.1f GB".format(gb)
 }
+
+/**
+ * Format file size for display.
+ */
+fun formatFileSize(bytes: Long): String = formatSize(bytes)

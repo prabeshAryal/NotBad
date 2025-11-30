@@ -1,10 +1,10 @@
 package notbad.prabe.sh.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,23 +16,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.FindReplace
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,13 +34,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,8 +49,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -68,14 +66,15 @@ import dev.snipme.highlights.model.BoldHighlight
 import dev.snipme.highlights.model.ColorHighlight
 import dev.snipme.highlights.model.SyntaxLanguage
 import dev.snipme.highlights.model.SyntaxThemes
+import kotlinx.coroutines.launch
 import notbad.prabe.sh.ui.theme.CodeTextStyle
 
 /**
  * Memory-efficient text editor with:
+ * - Find & Replace functionality
+ * - Synced line numbers
  * - Word wrap toggle
- * - Syntax highlighting  
- * - Collapsible line numbers (synced with scroll)
- * - Find/Search functionality
+ * - Syntax highlighting (disabled for large files)
  * - Cursor position preservation
  */
 @Composable
@@ -92,43 +91,59 @@ fun TextEditor(
     onToggleSearch: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val shouldShowLineNumbers = showLineNumbers && language != null
-    var lineNumbersExpanded by remember { mutableStateOf(true) }
-    
     val textLength = text.length
     
-    // Memory thresholds
-    val useLazyLoading = textLength > 100_000
+    // Memory thresholds - skip syntax highlighting for large files
     val disableSyntaxHighlighting = textLength > 200_000
     val effectiveLanguage = if (disableSyntaxHighlighting) null else language
     
-    // Only compute lines when needed
-    val lines = remember(text, useLazyLoading) {
-        if (useLazyLoading) text.lineSequence().toList() else emptyList()
-    }
-    val lineCount = if (useLazyLoading) lines.size else text.count { it == '\n' } + 1
+    // Calculate line count
+    val lineCount = remember(text) { text.count { it == '\n' } + 1 }
     
-    // Shared scroll state for syncing
-    val lazyListState = rememberLazyListState()
+    // Shared scroll state for syncing line numbers with content
     val contentScrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
     
     // Search state
     var currentSearchIndex by remember { mutableIntStateOf(0) }
+    var showReplace by remember { mutableStateOf(false) }
+    var replaceText by remember { mutableStateOf("") }
+    
     val searchResults = remember(text, searchQuery) {
-        if (searchQuery.isNotEmpty()) {
-            findAllOccurrences(text, searchQuery)
-        } else emptyList()
+        if (searchQuery.isNotEmpty()) findAllOccurrences(text, searchQuery) else emptyList()
+    }
+    
+    // Navigate to search result when index changes
+    LaunchedEffect(currentSearchIndex, searchResults) {
+        if (searchResults.isNotEmpty() && currentSearchIndex in searchResults.indices) {
+            val targetPosition = searchResults[currentSearchIndex].first
+            // Calculate approximate scroll position based on character position
+            val lineNumber = text.substring(0, targetPosition).count { it == '\n' }
+            val lineHeight = 18 // approximate line height in pixels
+            val scrollPosition = lineNumber * lineHeight
+            scope.launch {
+                contentScrollState.animateScrollTo(scrollPosition.coerceAtLeast(0))
+            }
+        }
     }
     
     Column(modifier = modifier.fillMaxSize()) {
-        // Search bar
-        AnimatedVisibility(visible = showSearch) {
-            SearchBar(
+        // Find & Replace bar
+        AnimatedVisibility(
+            visible = showSearch,
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
+            FindReplaceBar(
                 query = searchQuery,
                 onQueryChange = { 
                     onSearchQueryChange(it)
                     currentSearchIndex = 0
                 },
+                replaceText = replaceText,
+                onReplaceTextChange = { replaceText = it },
+                showReplace = showReplace,
+                onToggleReplace = { showReplace = !showReplace },
                 resultCount = searchResults.size,
                 currentIndex = currentSearchIndex,
                 onPrevious = {
@@ -141,36 +156,39 @@ fun TextEditor(
                         currentSearchIndex = (currentSearchIndex + 1) % searchResults.size
                     }
                 },
-                onClose = onToggleSearch
+                onReplace = {
+                    if (searchResults.isNotEmpty() && currentSearchIndex in searchResults.indices && !isReadOnly) {
+                        val range = searchResults[currentSearchIndex]
+                        val newText = text.substring(0, range.first) + replaceText + text.substring(range.last + 1)
+                        onTextChange(newText)
+                    }
+                },
+                onReplaceAll = {
+                    if (searchResults.isNotEmpty() && searchQuery.isNotEmpty() && !isReadOnly) {
+                        val newText = text.replace(searchQuery, replaceText, ignoreCase = true)
+                        onTextChange(newText)
+                        currentSearchIndex = 0
+                    }
+                },
+                onClose = onToggleSearch,
+                isReadOnly = isReadOnly
             )
         }
         
         Row(modifier = Modifier.weight(1f).fillMaxSize()) {
-            // Synced line numbers
-            if (shouldShowLineNumbers) {
-                SyncedLineNumberColumn(
+            // Line numbers - synced with content scroll
+            if (showLineNumbers && language != null) {
+                LineNumberColumn(
                     lineCount = lineCount,
-                    expanded = lineNumbersExpanded,
-                    onToggle = { lineNumbersExpanded = !lineNumbersExpanded },
-                    lazyListState = if (useLazyLoading) lazyListState else null,
-                    scrollState = if (!useLazyLoading) contentScrollState else null
+                    scrollState = contentScrollState,
+                    modifier = Modifier.fillMaxHeight()
                 )
             }
 
             // Editor content
             Box(modifier = Modifier.weight(1f).fillMaxSize()) {
-                if (useLazyLoading && isReadOnly) {
-                    LazyTextViewer(
-                        lines = lines,
-                        language = effectiveLanguage,
-                        wordWrapEnabled = wordWrapEnabled,
-                        listState = lazyListState,
-                        searchQuery = searchQuery,
-                        searchResults = searchResults,
-                        currentSearchIndex = currentSearchIndex
-                    )
-                } else if (isReadOnly) {
-                    SyncedReadOnlyTextViewer(
+                if (isReadOnly) {
+                    ReadOnlyTextViewer(
                         text = text,
                         language = effectiveLanguage,
                         wordWrapEnabled = wordWrapEnabled,
@@ -185,7 +203,9 @@ fun TextEditor(
                         onTextChange = onTextChange,
                         wordWrapEnabled = wordWrapEnabled,
                         scrollState = contentScrollState,
-                        searchQuery = searchQuery
+                        searchQuery = searchQuery,
+                        searchResults = searchResults,
+                        currentSearchIndex = currentSearchIndex
                     )
                 }
             }
@@ -194,17 +214,24 @@ fun TextEditor(
 }
 
 /**
- * Search bar component
+ * Find & Replace bar with navigation
  */
 @Composable
-private fun SearchBar(
+private fun FindReplaceBar(
     query: String,
     onQueryChange: (String) -> Unit,
+    replaceText: String,
+    onReplaceTextChange: (String) -> Unit,
+    showReplace: Boolean,
+    onToggleReplace: () -> Unit,
     resultCount: Int,
     currentIndex: Int,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
-    onClose: () -> Unit
+    onReplace: () -> Unit,
+    onReplaceAll: () -> Unit,
+    onClose: () -> Unit,
+    isReadOnly: Boolean
 ) {
     val focusRequester = remember { FocusRequester() }
     
@@ -216,218 +243,201 @@ private fun SearchBar(
         color = MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Default.Search,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                placeholder = { Text("Find", style = MaterialTheme.typography.bodySmall) },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodySmall,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                ),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(40.dp)
-                    .focusRequester(focusRequester)
-            )
-            
-            // Result count
-            if (query.isNotEmpty()) {
-                Text(
-                    text = if (resultCount > 0) "${currentIndex + 1}/$resultCount" else "0",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp)
+        Column(modifier = Modifier.padding(8.dp)) {
+            // Find row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Toggle replace button
+                if (!isReadOnly) {
+                    IconButton(
+                        onClick = onToggleReplace,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.FindReplace,
+                            contentDescription = "Toggle Replace",
+                            modifier = Modifier.size(18.dp),
+                            tint = if (showReplace) MaterialTheme.colorScheme.primary 
+                                   else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                
+                // Find field
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    placeholder = { 
+                        Text(
+                            "Find",
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1
+                        ) 
+                    },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = Color.Transparent,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .focusRequester(focusRequester)
                 )
+                
+                Spacer(modifier = Modifier.width(8.dp))
+                
+                // Result count
+                if (query.isNotEmpty()) {
+                    Text(
+                        text = if (resultCount > 0) "${currentIndex + 1}/$resultCount" else "0/0",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.widthIn(min = 40.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                
+                // Navigation buttons
+                IconButton(
+                    onClick = onPrevious,
+                    enabled = resultCount > 0,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowUp,
+                        contentDescription = "Previous",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                
+                IconButton(
+                    onClick = onNext,
+                    enabled = resultCount > 0,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Next",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close",
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
             
-            // Navigation buttons
-            IconButton(
-                onClick = onPrevious,
-                enabled = resultCount > 0,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    Icons.Default.KeyboardArrowUp,
-                    contentDescription = "Previous",
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            
-            IconButton(
-                onClick = onNext,
-                enabled = resultCount > 0,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    Icons.Default.KeyboardArrowDown,
-                    contentDescription = "Next",
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            
-            IconButton(
-                onClick = onClose,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "Close search",
-                    modifier = Modifier.size(18.dp)
-                )
+            // Replace row (if visible)
+            AnimatedVisibility(visible = showReplace && !isReadOnly) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Spacer(modifier = Modifier.width(32.dp)) // Align with find field
+                    
+                    OutlinedTextField(
+                        value = replaceText,
+                        onValueChange = onReplaceTextChange,
+                        placeholder = { 
+                            Text(
+                                "Replace",
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1
+                            ) 
+                        },
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodySmall,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.width(4.dp))
+                    
+                    TextButton(
+                        onClick = onReplace,
+                        enabled = resultCount > 0
+                    ) {
+                        Text("Replace", style = MaterialTheme.typography.labelSmall)
+                    }
+                    
+                    TextButton(
+                        onClick = onReplaceAll,
+                        enabled = resultCount > 0
+                    ) {
+                        Text("All", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
         }
     }
 }
 
 /**
- * Line number column that syncs with content scroll
+ * Line number column synced with scroll state
  */
 @Composable
-private fun SyncedLineNumberColumn(
+private fun LineNumberColumn(
     lineCount: Int,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    lazyListState: LazyListState?,
-    scrollState: androidx.compose.foundation.ScrollState?,
+    scrollState: androidx.compose.foundation.ScrollState,
     modifier: Modifier = Modifier
 ) {
     val lineNumberWidth = remember(lineCount) {
-        (lineCount.toString().length * 8 + 4).dp
+        (lineCount.toString().length * 9 + 16).dp
     }
     
-    Row(
+    val density = LocalDensity.current
+    var lineHeight by remember { mutableStateOf(18.dp) }
+    
+    Box(
         modifier = modifier
-            .fillMaxHeight()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-        verticalAlignment = Alignment.Top
+            .width(lineNumberWidth)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
     ) {
-        // Toggle button
-        Box(
+        Column(
             modifier = Modifier
-                .width(14.dp)
-                .fillMaxHeight()
-                .clickable(onClick = onToggle),
-            contentAlignment = Alignment.TopCenter
+                .verticalScroll(scrollState)
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            horizontalAlignment = Alignment.End
         ) {
-            Icon(
-                imageVector = if (expanded) Icons.Filled.ChevronLeft else Icons.Filled.ChevronRight,
-                contentDescription = if (expanded) "Collapse" else "Expand",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.padding(top = 4.dp).size(14.dp)
-            )
-        }
-        
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandHorizontally(),
-            exit = shrinkHorizontally()
-        ) {
-            if (lazyListState != null) {
-                // For lazy loading - use separate LazyColumn synced by state
-                LazyColumn(
-                    state = lazyListState,
-                    userScrollEnabled = false,
-                    modifier = Modifier
-                        .width(lineNumberWidth)
-                        .padding(vertical = 4.dp, horizontal = 2.dp)
-                ) {
-                    items(lineCount) { index ->
-                        Text(
-                            text = (index + 1).toString(),
-                            style = CodeTextStyle.copy(
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                lineHeight = 18.sp
-                            ),
-                            textAlign = TextAlign.End,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            } else if (scrollState != null) {
-                // For regular scroll - sync with scroll state
-                Column(
-                    modifier = Modifier
-                        .width(lineNumberWidth)
-                        .verticalScroll(scrollState)
-                        .padding(vertical = 4.dp, horizontal = 2.dp),
-                    horizontalAlignment = Alignment.End
-                ) {
-                    for (i in 1..lineCount) {
-                        Text(
-                            text = i.toString(),
-                            style = CodeTextStyle.copy(
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                lineHeight = 18.sp
-                            )
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Lazy text viewer for large files
- */
-@Composable
-private fun LazyTextViewer(
-    lines: List<String>,
-    language: String?,
-    wordWrapEnabled: Boolean = true,
-    listState: LazyListState,
-    searchQuery: String = "",
-    searchResults: List<IntRange> = emptyList(),
-    currentSearchIndex: Int = 0,
-    modifier: Modifier = Modifier
-) {
-    val horizontalScrollState = rememberScrollState()
-    
-    SelectionContainer {
-        LazyColumn(
-            state = listState,
-            modifier = modifier
-                .fillMaxSize()
-                .then(if (!wordWrapEnabled) Modifier.horizontalScroll(horizontalScrollState) else Modifier)
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        ) {
-            itemsIndexed(lines, key = { index, _ -> index }) { _, line ->
-                val displayLine = if (line.isEmpty()) " " else line
+            for (i in 1..lineCount) {
                 Text(
-                    text = if (language != null) {
-                        highlightLine(displayLine, language)
-                    } else {
-                        AnnotatedString(displayLine)
-                    },
+                    text = i.toString(),
                     style = CodeTextStyle.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         lineHeight = 18.sp
                     ),
-                    softWrap = wordWrapEnabled,
-                    modifier = if (wordWrapEnabled) Modifier.fillParentMaxWidth() else Modifier
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onGloballyPositioned { coordinates ->
+                            if (i == 1) {
+                                lineHeight = with(density) { coordinates.size.height.toDp() }
+                            }
+                        },
+                    textAlign = TextAlign.End
                 )
             }
         }
@@ -435,17 +445,17 @@ private fun LazyTextViewer(
 }
 
 /**
- * Read-only text viewer synced with line numbers
+ * Read-only text viewer with syntax highlighting and search highlighting
  */
 @Composable
-private fun SyncedReadOnlyTextViewer(
+private fun ReadOnlyTextViewer(
     text: String,
     language: String?,
-    wordWrapEnabled: Boolean = true,
+    wordWrapEnabled: Boolean,
     scrollState: androidx.compose.foundation.ScrollState,
-    searchQuery: String = "",
-    searchResults: List<IntRange> = emptyList(),
-    currentSearchIndex: Int = 0,
+    searchQuery: String,
+    searchResults: List<IntRange>,
+    currentSearchIndex: Int,
     modifier: Modifier = Modifier
 ) {
     val horizontalScrollState = rememberScrollState()
@@ -473,28 +483,44 @@ private fun SyncedReadOnlyTextViewer(
 }
 
 /**
- * Editable text field with cursor position preservation
+ * Editable text field with cursor position preservation and search highlighting
  */
 @Composable
 private fun EditableTextField(
     text: String,
     onTextChange: (String) -> Unit,
-    wordWrapEnabled: Boolean = true,
+    wordWrapEnabled: Boolean,
     scrollState: androidx.compose.foundation.ScrollState,
-    searchQuery: String = "",
+    searchQuery: String,
+    searchResults: List<IntRange>,
+    currentSearchIndex: Int,
     modifier: Modifier = Modifier
 ) {
-    // FIXED: Don't reset TextFieldValue when text changes externally
+    // Keep TextFieldValue separate to preserve cursor position
     var textFieldValue by remember { mutableStateOf(TextFieldValue(text)) }
     
-    // Sync external text changes without resetting cursor
+    // Sync external text changes without resetting cursor position
     LaunchedEffect(text) {
         if (textFieldValue.text != text) {
-            textFieldValue = TextFieldValue(text)
+            // Preserve cursor at same position if possible
+            val cursorPos = textFieldValue.selection.start.coerceAtMost(text.length)
+            textFieldValue = TextFieldValue(
+                text = text,
+                selection = TextRange(cursorPos)
+            )
         }
     }
     
     val horizontalScrollState = rememberScrollState()
+    
+    // Build highlighted text for display
+    val visualTransformation = remember(searchQuery, searchResults, currentSearchIndex) {
+        if (searchQuery.isNotEmpty() && searchResults.isNotEmpty()) {
+            SearchHighlightVisualTransformation(searchResults, currentSearchIndex)
+        } else {
+            null
+        }
+    }
     
     BasicTextField(
         value = textFieldValue,
@@ -516,6 +542,34 @@ private fun EditableTextField(
             .then(if (!wordWrapEnabled) Modifier.horizontalScroll(horizontalScrollState) else Modifier)
             .padding(horizontal = 8.dp, vertical = 4.dp)
     )
+}
+
+/**
+ * Visual transformation for search highlighting in editable field
+ */
+private class SearchHighlightVisualTransformation(
+    private val searchResults: List<IntRange>,
+    private val currentIndex: Int
+) {
+    fun filter(text: AnnotatedString): AnnotatedString {
+        return buildAnnotatedString {
+            append(text)
+            searchResults.forEachIndexed { index, range ->
+                if (range.last < text.length) {
+                    val bgColor = if (index == currentIndex) {
+                        Color(0xFFFFE082)
+                    } else {
+                        Color(0xFFFFEB3B).copy(alpha = 0.3f)
+                    }
+                    addStyle(
+                        SpanStyle(background = bgColor),
+                        range.first,
+                        range.last + 1
+                    )
+                }
+            }
+        }
+    }
 }
 
 // ============== Helper functions ==============
@@ -541,13 +595,13 @@ private fun buildHighlightedText(
     return buildAnnotatedString {
         append(text)
         
-        // Apply syntax highlighting first
-        if (language != null && text.length < 50_000) {
+        // Apply syntax highlighting first (only for smaller files)
+        if (language != null && text.length < 100_000) {
             try {
                 val syntaxLanguage = mapLanguageToSyntax(language)
                 if (syntaxLanguage != null) {
                     val highlights = Highlights.Builder()
-                        .code(text.take(50_000))
+                        .code(text.take(100_000))
                         .theme(SyntaxThemes.darcula())
                         .language(syntaxLanguage)
                         .build()
@@ -575,66 +629,25 @@ private fun buildHighlightedText(
                         }
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+                // Syntax highlighting failed, continue without it
+            }
         }
         
-        // Highlight search results
+        // Highlight search results (overlays on top of syntax highlighting)
         searchResults.forEachIndexed { index, range ->
-            val bgColor = if (index == currentSearchIndex) {
-                Color(0xFFFFE082) // Current match - yellow
-            } else {
-                Color(0xFFFFEB3B).copy(alpha = 0.3f) // Other matches
-            }
-            addStyle(
-                SpanStyle(background = bgColor),
-                range.first,
-                range.last + 1
-            )
-        }
-    }
-}
-
-@Composable
-private fun highlightLine(line: String, language: String): AnnotatedString {
-    val syntaxLanguage = mapLanguageToSyntax(language) ?: return AnnotatedString(line)
-    
-    return remember(line, language) {
-        try {
-            val highlights = Highlights.Builder()
-                .code(line)
-                .theme(SyntaxThemes.darcula())
-                .language(syntaxLanguage)
-                .build()
-            
-            buildAnnotatedString {
-                append(line)
-                highlights.getHighlights().forEach { highlight ->
-                    when (highlight) {
-                        is ColorHighlight -> {
-                            if (highlight.location.start < line.length && highlight.location.end <= line.length) {
-                                addStyle(
-                                    SpanStyle(color = Color(highlight.rgb).copy(alpha = 1f)),
-                                    highlight.location.start,
-                                    highlight.location.end
-                                )
-                            }
-                        }
-                        is BoldHighlight -> {
-                            if (highlight.location.start < line.length && highlight.location.end <= line.length) {
-                                addStyle(
-                                    SpanStyle(fontWeight = FontWeight.Bold),
-                                    highlight.location.start,
-                                    highlight.location.end
-                                )
-                            }
-                        }
-                    }
+            if (range.last < text.length) {
+                val bgColor = if (index == currentSearchIndex) {
+                    Color(0xFFFFE082) // Current match - bright yellow
+                } else {
+                    Color(0xFFFFEB3B).copy(alpha = 0.3f) // Other matches - light yellow
                 }
+                addStyle(
+                    SpanStyle(background = bgColor),
+                    range.first,
+                    range.last + 1
+                )
             }
-        } catch (_: OutOfMemoryError) {
-            AnnotatedString(line)
-        } catch (_: Exception) {
-            AnnotatedString(line)
         }
     }
 }
@@ -655,13 +668,9 @@ private fun mapLanguageToSyntax(language: String): SyntaxLanguage? {
         "php" -> SyntaxLanguage.PHP
         "ruby", "rb" -> SyntaxLanguage.RUBY
         "shell", "bash", "sh", "zsh" -> SyntaxLanguage.SHELL
-        "sql" -> SyntaxLanguage.DEFAULT
-        "json" -> SyntaxLanguage.DEFAULT
-        "xml", "html", "htm" -> SyntaxLanguage.DEFAULT
-        "yaml", "yml" -> SyntaxLanguage.DEFAULT
-        "markdown", "md" -> SyntaxLanguage.DEFAULT
-        "css" -> SyntaxLanguage.DEFAULT
-        "gradle" -> SyntaxLanguage.KOTLIN
+        "dart" -> SyntaxLanguage.DART
+        "perl" -> SyntaxLanguage.PERL
+        "coffeescript", "coffee" -> SyntaxLanguage.COFFEESCRIPT
         else -> null
     }
 }

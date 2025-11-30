@@ -11,7 +11,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -23,12 +22,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.flow.collectLatest
-import notbad.prabe.sh.core.io.LargeFileRepository
+import notbad.prabe.sh.core.model.FileMetadata
 import notbad.prabe.sh.ui.components.EmptyState
 import notbad.prabe.sh.ui.components.ErrorScreen
+import notbad.prabe.sh.ui.components.FileInfoDialog
 import notbad.prabe.sh.ui.components.FileViewerTopBar
 import notbad.prabe.sh.ui.components.HexViewer
 import notbad.prabe.sh.ui.components.LoadingScreen
+import notbad.prabe.sh.ui.components.LoadingScreenWithProgress
 import notbad.prabe.sh.ui.components.MarkdownPreview
 import notbad.prabe.sh.ui.components.TextEditor
 import notbad.prabe.sh.ui.components.TruncationBanner
@@ -58,6 +59,7 @@ fun FileViewerScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showUnsavedChangesDialog by remember { mutableStateOf(false) }
+    var showFileInfoDialog by remember { mutableStateOf<FileMetadata?>(null) }
 
     // Handle back press with unsaved changes check
     BackHandler {
@@ -84,6 +86,9 @@ fun FileViewerScreen(
                 is FileViewerEffect.ShowUnsavedChangesDialog -> {
                     showUnsavedChangesDialog = true
                 }
+                is FileViewerEffect.ShowFileInfo -> {
+                    showFileInfoDialog = effect.metadata
+                }
             }
         }
     }
@@ -100,6 +105,14 @@ fun FileViewerScreen(
                 showUnsavedChangesDialog = false
                 viewModel.onEvent(FileViewerEvent.SaveFile)
             }
+        )
+    }
+    
+    // File info dialog
+    showFileInfoDialog?.let { metadata ->
+        FileInfoDialog(
+            metadata = metadata,
+            onDismiss = { showFileInfoDialog = null }
         )
     }
 
@@ -139,7 +152,8 @@ fun FileViewerScreen(
                             } else {
                                 onNavigateBack()
                             }
-                        }
+                        },
+                        onShowFileInfo = { viewModel.onEvent(FileViewerEvent.ShowFileInfo) }
                     )
                 }
             }
@@ -154,7 +168,8 @@ fun FileViewerScreen(
 private fun FileViewerContent(
     state: FileViewerUiState.Loaded,
     onEvent: (FileViewerEvent) -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onShowFileInfo: () -> Unit
 ) {
     val isModified = when (val content = state.contentState) {
         is ContentState.TextContent -> content.isModified
@@ -178,7 +193,8 @@ private fun FileViewerContent(
             onReload = { onEvent(FileViewerEvent.ReloadFile) },
             onViewModeChange = { onEvent(FileViewerEvent.ChangeViewMode(it)) },
             onToggleWordWrap = { onEvent(FileViewerEvent.ToggleWordWrap) },
-            onToggleSearch = { onEvent(FileViewerEvent.ToggleSearch) }
+            onToggleSearch = { onEvent(FileViewerEvent.ToggleSearch) },
+            onShowFileInfo = onShowFileInfo
         )
 
         // Truncation warning if applicable
@@ -199,7 +215,11 @@ private fun FileViewerContent(
         Box(modifier = Modifier.weight(1f)) {
             when (val content = state.contentState) {
                 is ContentState.Loading -> {
-                    LoadingScreen(message = "Loading content...")
+                    LoadingScreenWithProgress(
+                        progress = content.progress,
+                        loadedBytes = content.loadedBytes,
+                        totalBytes = content.totalBytes
+                    )
                 }
 
                 is ContentState.Error -> {

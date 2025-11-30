@@ -1,6 +1,5 @@
 package notbad.prabe.sh.ui.state
 
-import notbad.prabe.sh.core.model.DetectedFileType
 import notbad.prabe.sh.core.model.FileMetadata
 import notbad.prabe.sh.core.model.HexLine
 
@@ -47,7 +46,8 @@ sealed interface FileViewerUiState {
      * Loading state - file is being opened/analyzed
      */
     data class Loading(
-        val message: String = "Opening file..."
+        val message: String = "Opening file...",
+        val progress: Float = 0f // 0.0 to 1.0
     ) : FileViewerUiState
 
     /**
@@ -73,9 +73,13 @@ sealed interface FileViewerUiState {
  */
 sealed interface ContentState {
     /**
-     * Content is loading
+     * Content is loading with progress
      */
-    data object Loading : ContentState
+    data class Loading(
+        val progress: Float = 0f, // 0.0 to 1.0
+        val loadedBytes: Long = 0,
+        val totalBytes: Long = 0
+    ) : ContentState
 
     /**
      * Text content loaded (for text/code/markdown modes)
@@ -168,6 +172,11 @@ sealed interface FileViewerEvent {
      * User closed the file
      */
     data object CloseFile : FileViewerEvent
+    
+    /**
+     * User wants to see file info
+     */
+    data object ShowFileInfo : FileViewerEvent
 }
 
 /**
@@ -193,4 +202,9 @@ sealed interface FileViewerEffect {
      * Show unsaved changes dialog
      */
     data object ShowUnsavedChangesDialog : FileViewerEffect
+    
+    /**
+     * Show file info dialog
+     */
+    data class ShowFileInfo(val metadata: FileMetadata) : FileViewerEffect
 }
