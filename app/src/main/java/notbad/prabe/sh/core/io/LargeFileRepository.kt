@@ -284,48 +284,37 @@ class LargeFileRepository(
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val fileSize = getFileSize(uri)
-            
-            // For very small files, just read directly
-            if (fileSize <= PROGRESSIVE_CHUNK_SIZE) {
-                onProgress(fileSize, fileSize, 1f)
-                return@runCatching readRange(uri, 0, fileSize.toInt()).getOrThrow().toString(charset)
-            }
-            
-            // Cap at absolute max to prevent true OOM
-            val maxBytes = minOf(fileSize, ABSOLUTE_MAX_TEXT_SIZE)
-            
-            val stringBuilder = StringBuilder((maxBytes / 2).toInt()) // Estimate initial capacity
+            val useChunked = fileSize <= 0 || fileSize == -1L || fileSize > PROGRESSIVE_CHUNK_SIZE
+            val maxBytes = if (fileSize > 0) minOf(fileSize, ABSOLUTE_MAX_TEXT_SIZE) else ABSOLUTE_MAX_TEXT_SIZE
+            val stringBuilder = StringBuilder((maxBytes / 2).toInt())
             var bytesLoaded = 0L
             var offset = 0L
-            
+
             contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
                 FileInputStream(pfd.fileDescriptor).use { fis ->
                     fis.channel.use { channel ->
                         while (offset < maxBytes) {
                             val bytesToRead = minOf(PROGRESSIVE_CHUNK_SIZE.toLong(), maxBytes - offset).toInt()
                             val buffer = ByteBuffer.allocate(bytesToRead)
-                            
                             channel.position(offset)
                             val bytesRead = channel.read(buffer)
-                            
                             if (bytesRead <= 0) break
-                            
                             buffer.flip()
                             val data = ByteArray(bytesRead)
                             buffer.get(data)
-                            
                             stringBuilder.append(data.toString(charset))
-                            
                             bytesLoaded += bytesRead
                             offset += bytesRead
-                            
-                            val progress = (bytesLoaded.toFloat() / maxBytes).coerceIn(0f, 1f)
+                            // Estimate progress: if fileSize is unknown, use offset/maxBytes
+                            val progress = if (fileSize > 0) (bytesLoaded.toFloat() / maxBytes).coerceIn(0f, 1f) else (offset.toFloat() / maxBytes).coerceIn(0f, 1f)
                             onProgress(bytesLoaded, maxBytes, progress)
                         }
                     }
                 }
             } ?: throw IllegalStateException("Unable to open file descriptor for URI: $uri")
-            
+
+            // If file is very small and we only did one chunk, ensure progress is set to 100%
+            onProgress(bytesLoaded, maxBytes, 1f)
             stringBuilder.toString()
         }
     }
