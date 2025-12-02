@@ -30,7 +30,9 @@ enum class ViewMode {
     /**
      * Raw Markdown editor (source view)
      */
-    MARKDOWN_SOURCE
+    MARKDOWN_SOURCE,
+
+
 }
 
 /**

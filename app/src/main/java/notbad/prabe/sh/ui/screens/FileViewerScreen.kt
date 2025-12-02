@@ -39,6 +39,9 @@ import notbad.prabe.sh.ui.state.FileViewerEvent
 import notbad.prabe.sh.ui.state.FileViewerUiState
 import notbad.prabe.sh.ui.state.ViewMode
 import notbad.prabe.sh.ui.viewmodel.FileViewerViewModel
+import org.json.JSONArray
+import org.json.JSONObject
+import org.json.JSONTokener
 
 /**
  * Main file viewer/editor screen.
@@ -298,8 +301,27 @@ private fun TextContentView(
         }
 
         ViewMode.CODE -> {
+            // Auto-format JSON if in Code mode
+            val displayText = remember(content.text, content.language) {
+                if (content.language?.equals("json", ignoreCase = true) == true) {
+                    try {
+                        val tokener = JSONTokener(content.text)
+                        val value = tokener.nextValue()
+                        when (value) {
+                            is JSONObject -> value.toString(4)
+                            is JSONArray -> value.toString(4)
+                            else -> content.text
+                        }
+                    } catch (e: Exception) {
+                        content.text
+                    }
+                } else {
+                    content.text
+                }
+            }
+
             TextEditor(
-                text = content.text,
+                text = displayText,
                 onTextChange = onTextChange,
                 isReadOnly = isReadOnly,
                 language = content.language,
@@ -335,6 +357,8 @@ private fun TextContentView(
                 modifier = Modifier.fillMaxSize()
             )
         }
+
+
     }
 }
 

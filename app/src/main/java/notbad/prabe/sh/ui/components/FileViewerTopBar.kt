@@ -149,6 +149,7 @@ fun FileViewerTopBar(
                             showViewModeMenu = false
                         }
                     )
+
                     if (metadata.detectedType == DetectedFileType.MARKDOWN) {
                         ViewModeMenuItem(
                             mode = ViewMode.MARKDOWN_PREVIEW,
@@ -317,6 +318,7 @@ val ViewMode.displayName: String
         ViewMode.CODE -> "Code"
         ViewMode.MARKDOWN_PREVIEW -> "Preview"
         ViewMode.MARKDOWN_SOURCE -> "Source"
+
     }
 
 val ViewMode.icon: ImageVector
@@ -326,6 +328,7 @@ val ViewMode.icon: ImageVector
         ViewMode.CODE -> Icons.Default.Code
         ViewMode.MARKDOWN_PREVIEW -> Icons.Default.Preview
         ViewMode.MARKDOWN_SOURCE -> Icons.Default.Edit
+
     }
 
 val ViewMode.isEditable: Boolean
