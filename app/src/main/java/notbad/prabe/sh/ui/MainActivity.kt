@@ -39,6 +39,16 @@ class MainActivity : ComponentActivity() {
     ) { uri: Uri? ->
         uri?.let { handleUri(it, persistPermissions = true) }
     }
+    
+    /**
+     * File creator launcher using the Storage Access Framework.
+     * Allows creating new files.
+     */
+    private val fileCreatorLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri: Uri? ->
+        uri?.let { handleUri(it, persistPermissions = true) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +63,7 @@ class MainActivity : ComponentActivity() {
                     viewModel = viewModel,
                     onNavigateBack = { finish() },
                     onOpenFile = { openFilePicker() },
+                    onCreateFile = { createNewFile() },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -148,6 +159,21 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(
                 this,
                 "Error opening file picker: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+    
+    /**
+     * Creates a new file.
+     */
+    private fun createNewFile() {
+        try {
+            fileCreatorLauncher.launch("untitled.txt")
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                "Error creating file: ${e.message}",
                 Toast.LENGTH_LONG
             ).show()
         }

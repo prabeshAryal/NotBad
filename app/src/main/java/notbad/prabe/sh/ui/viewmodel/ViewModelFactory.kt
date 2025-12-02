@@ -20,7 +20,8 @@ class ViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return when {
             modelClass.isAssignableFrom(FileViewerViewModel::class.java) -> {
-                FileViewerViewModel(repository) as T
+                val prefs = context.getSharedPreferences("notbad_prefs", Context.MODE_PRIVATE)
+                FileViewerViewModel(repository, prefs) as T
             }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }

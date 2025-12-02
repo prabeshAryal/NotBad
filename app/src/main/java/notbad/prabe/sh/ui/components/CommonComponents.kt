@@ -3,12 +3,18 @@ package notbad.prabe.sh.ui.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.Button
@@ -182,6 +188,9 @@ fun ErrorScreen(
 @Composable
 fun EmptyState(
     onOpenFile: () -> Unit,
+    onCreateFile: () -> Unit,
+    recentFiles: List<String>,
+    onOpenRecentFile: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -196,11 +205,11 @@ fun EmptyState(
             Icon(
                 imageVector = Icons.Default.FolderOpen,
                 contentDescription = null,
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text(
                 text = "No file open",
@@ -208,19 +217,78 @@ fun EmptyState(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Open a file from another app or use the button below",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-
             Spacer(modifier = Modifier.height(24.dp))
 
-            Button(onClick = onOpenFile) {
-                Text("Open File")
+            // Action Buttons
+            androidx.compose.foundation.layout.Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Button(onClick = onOpenFile) {
+                    Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Open File")
+                }
+                
+                androidx.compose.material3.OutlinedButton(onClick = onCreateFile) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("New File")
+                }
+            }
+            
+            if (recentFiles.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                Text(
+                    text = "Recent Files",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                androidx.compose.foundation.lazy.LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(recentFiles) { uriString ->
+                        val uri = android.net.Uri.parse(uriString)
+                        val name = try {
+                            // Simple extraction, ideally use metadata
+                            uri.path?.substringAfterLast('/') ?: uriString
+                        } catch (e: Exception) {
+                            uriString
+                        }
+                        
+                        androidx.compose.material3.Surface(
+                            onClick = { onOpenRecentFile(uriString) },
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            androidx.compose.foundation.layout.Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(12.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Description,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    text = name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

@@ -39,7 +39,8 @@ import notbad.prabe.sh.ui.state.ViewMode
  * All file I/O is performed on background threads via the repository layer.
  */
 class FileViewerViewModel(
-    private val repository: LargeFileRepository
+    private val repository: LargeFileRepository,
+    private val sharedPreferences: android.content.SharedPreferences
 ) : ViewModel() {
 
     // Use cases
@@ -48,7 +49,7 @@ class FileViewerViewModel(
     private val loadHexPageUseCase = LoadHexPageUseCase(repository)
 
     // UI State
-    private val _uiState = MutableStateFlow<FileViewerUiState>(FileViewerUiState.Idle)
+    private val _uiState = MutableStateFlow<FileViewerUiState>(FileViewerUiState.Idle())
     val uiState: StateFlow<FileViewerUiState> = _uiState.asStateFlow()
 
     // One-time effects (toasts, navigation, etc.)
@@ -69,6 +70,15 @@ class FileViewerViewModel(
 
     // Loaded hex lines cache
     private val loadedHexLines = mutableListOf<HexLine>()
+    
+    // Preferences
+    private var showLineNumbers: Boolean
+        get() = sharedPreferences.getBoolean("show_line_numbers", false)
+        set(value) = sharedPreferences.edit().putBoolean("show_line_numbers", value).apply()
+
+    init {
+        loadRecentFiles()
+    }
 
     /**
      * Opens a file from the given URI.
@@ -81,6 +91,7 @@ class FileViewerViewModel(
             _uiState.value = FileViewerUiState.Loading("Analyzing file...")
 
             currentUri = uri
+            addToRecentFiles(uri)
 
             openFileUseCase(uri)
                 .onSuccess { metadata ->
@@ -113,7 +124,88 @@ class FileViewerViewModel(
             is FileViewerEvent.Search -> performSearch(event.query)
             is FileViewerEvent.CloseFile -> closeFile()
             is FileViewerEvent.ShowFileInfo -> showFileInfo()
+            is FileViewerEvent.ToggleLineNumbers -> toggleLineNumbers()
+            is FileViewerEvent.CreateFile -> createFile(event.callback)
+            is FileViewerEvent.OpenRecentFile -> openRecentFile(event.uri)
         }
+    }
+
+    /**
+     * Loads recent files from SharedPreferences.
+     */
+    private fun loadRecentFiles() {
+        val recentString = sharedPreferences.getString("recent_files", "") ?: ""
+        val recentList = if (recentString.isNotEmpty()) {
+            recentString.split(",").filter { it.isNotEmpty() }
+        } else {
+            emptyList()
+        }
+        
+        if (_uiState.value is FileViewerUiState.Idle) {
+            _uiState.value = FileViewerUiState.Idle(recentFiles = recentList)
+        }
+    }
+
+    /**
+     * Adds a URI to recent files.
+     */
+    private fun addToRecentFiles(uri: Uri) {
+        val uriString = uri.toString()
+        val recentString = sharedPreferences.getString("recent_files", "") ?: ""
+        val recentList = if (recentString.isNotEmpty()) {
+            recentString.split(",").toMutableList()
+        } else {
+            mutableListOf()
+        }
+
+        // Remove if exists, add to top
+        recentList.remove(uriString)
+        recentList.add(0, uriString)
+
+        // Keep only last 10
+        if (recentList.size > 10) {
+            recentList.removeAt(recentList.lastIndex)
+        }
+
+        sharedPreferences.edit().putString("recent_files", recentList.joinToString(",")).apply()
+    }
+
+    /**
+     * Opens a recent file.
+     */
+    private fun openRecentFile(uriString: String) {
+        try {
+            val uri = Uri.parse(uriString)
+            openFile(uri)
+        } catch (e: Exception) {
+            viewModelScope.launch {
+                _effects.emit(FileViewerEffect.ShowMessage("Invalid URI: $uriString"))
+            }
+        }
+    }
+
+    /**
+     * Toggles line numbers.
+     */
+    private fun toggleLineNumbers() {
+        val newState = !showLineNumbers
+        showLineNumbers = newState
+        
+        val state = _uiState.value
+        if (state is FileViewerUiState.Loaded && state.contentState is ContentState.TextContent) {
+            _uiState.value = state.copy(
+                contentState = state.contentState.copy(
+                    showLineNumbers = newState
+                )
+            )
+        }
+    }
+
+    /**
+     * Initiates file creation.
+     */
+    private fun createFile(callback: () -> Unit) {
+        callback()
     }
 
     /**
@@ -187,7 +279,8 @@ class FileViewerViewModel(
                             isModified = false,
                             language = language,
                             isTruncated = isTruncated,
-                            totalSize = metadata.size
+                            totalSize = metadata.size,
+                            showLineNumbers = showLineNumbers // Initialize from prefs
                         )
                     )
                 }
@@ -460,6 +553,9 @@ class FileViewerViewModel(
             }
         }
 
+        // Reset to idle state with recent files
+        loadRecentFiles()
+        
         viewModelScope.launch {
             _effects.emit(FileViewerEffect.NavigateBack)
         }
@@ -469,6 +565,9 @@ class FileViewerViewModel(
      * Forces close without saving.
      */
     fun forceClose() {
+        // Reset to idle state with recent files
+        loadRecentFiles()
+        
         viewModelScope.launch {
             _effects.emit(FileViewerEffect.NavigateBack)
         }

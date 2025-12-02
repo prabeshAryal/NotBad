@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Preview
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
@@ -56,6 +57,8 @@ fun FileViewerTopBar(
     onViewModeChange: (ViewMode) -> Unit,
     onToggleWordWrap: () -> Unit = {},
     onToggleSearch: () -> Unit = {},
+    showLineNumbers: Boolean = false,
+    onToggleLineNumbers: () -> Unit = {},
     onShowFileInfo: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -238,6 +241,27 @@ fun FileViewerTopBar(
                         }
                     )
                     
+                    // Line Numbers toggle
+                    DropdownMenuItem(
+                        text = { Text("Show Line Numbers") },
+                        onClick = {
+                            onToggleLineNumbers()
+                            showMenu = false
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.FormatListNumbered, contentDescription = null)
+                        },
+                        trailingIcon = {
+                            if (showLineNumbers) {
+                                Icon(
+                                    Icons.Default.Check, 
+                                    contentDescription = "Enabled",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    )
+
                     HorizontalDivider()
                     
                     // File Info

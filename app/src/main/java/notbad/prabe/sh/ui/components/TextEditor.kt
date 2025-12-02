@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -49,7 +52,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -67,11 +69,7 @@ import dev.snipme.highlights.model.ColorHighlight
 import dev.snipme.highlights.model.SyntaxLanguage
 import dev.snipme.highlights.model.SyntaxThemes
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.text.PlatformTextStyle
-import androidx.compose.ui.text.TextStyle
 import notbad.prabe.sh.ui.theme.CodeTextStyle
 
 /**
@@ -99,8 +97,8 @@ fun TextEditor(
     val textLength = text.length
     
     // Memory thresholds - skip syntax highlighting for large files
-    val disableSyntaxHighlighting = textLength > 50_000 // Lowered threshold for syntax highlighting
-    val useLargeFileViewer = textLength > 200_000 // Use LazyColumn for very large files
+    val disableSyntaxHighlighting = textLength > 50_000
+    val useLargeFileViewer = textLength > 200_000
     
     val effectiveLanguage = if (disableSyntaxHighlighting) null else language
     
@@ -126,9 +124,8 @@ fun TextEditor(
     LaunchedEffect(currentSearchIndex, searchResults) {
         if (searchResults.isNotEmpty() && currentSearchIndex in searchResults.indices) {
             val targetPosition = searchResults[currentSearchIndex].first
-            // Calculate approximate scroll position based on character position
             val lineNumber = text.substring(0, targetPosition).count { it == '\n' }
-            val lineHeight = 18 // approximate line height in pixels
+            val lineHeight = 18
             val scrollPosition = lineNumber * lineHeight
             scope.launch {
                 contentScrollState.animateScrollTo(scrollPosition.coerceAtLeast(0))
@@ -187,7 +184,7 @@ fun TextEditor(
         if (useLargeFileViewer) {
             LargeFileViewer(
                 text = text,
-                showLineNumbers = showLineNumbers,
+                showLineNumbers = showLineNumbers && language != null,
                 modifier = Modifier.weight(1f)
             )
         } else {
@@ -366,7 +363,7 @@ private fun FindReplaceBar(
                         .padding(top = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Spacer(modifier = Modifier.width(32.dp)) // Align with find field
+                    Spacer(modifier = Modifier.width(32.dp))
                     
                     OutlinedTextField(
                         value = replaceText,
@@ -425,9 +422,6 @@ private fun LineNumberColumn(
         (lineCount.toString().length * 9 + 16).dp
     }
     
-    val density = LocalDensity.current
-    var lineHeight by remember { mutableStateOf(18.dp) }
-    
     Box(
         modifier = modifier
             .width(lineNumberWidth)
@@ -448,13 +442,7 @@ private fun LineNumberColumn(
                         lineHeight = 18.sp,
                         platformStyle = PlatformTextStyle(includeFontPadding = false)
                     ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onGloballyPositioned { coordinates ->
-                            if (i == 1) {
-                                lineHeight = with(density) { coordinates.size.height.toDp() }
-                            }
-                        },
+                    modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.End
                 )
             }
@@ -478,12 +466,9 @@ private fun ReadOnlyTextViewer(
 ) {
     val horizontalScrollState = rememberScrollState()
     
-    val activeColor = MaterialTheme.colorScheme.primaryContainer
-    val inactiveColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
-
     SelectionContainer {
-        val displayText = remember(text, language, searchQuery, searchResults, currentSearchIndex, activeColor, inactiveColor) {
-            buildHighlightedText(text, language, searchQuery, searchResults, currentSearchIndex, activeColor, inactiveColor)
+        val displayText = remember(text, language, searchQuery, searchResults, currentSearchIndex) {
+            buildHighlightedText(text, language, searchQuery, searchResults, currentSearchIndex)
         }
         
         Text(
@@ -518,13 +503,10 @@ private fun EditableTextField(
     currentSearchIndex: Int,
     modifier: Modifier = Modifier
 ) {
-    // Keep TextFieldValue separate to preserve cursor position
     var textFieldValue by remember { mutableStateOf(TextFieldValue(text)) }
     
-    // Sync external text changes without resetting cursor position
     LaunchedEffect(text) {
         if (textFieldValue.text != text) {
-            // Preserve cursor at same position if possible
             val cursorPos = textFieldValue.selection.start.coerceAtMost(text.length)
             textFieldValue = TextFieldValue(
                 text = text,
@@ -534,18 +516,6 @@ private fun EditableTextField(
     }
     
     val horizontalScrollState = rememberScrollState()
-    
-    val activeColor = MaterialTheme.colorScheme.primaryContainer
-    val inactiveColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
-
-    // Build highlighted text for display
-    val visualTransformation = remember(searchQuery, searchResults, currentSearchIndex, activeColor, inactiveColor) {
-        if (searchQuery.isNotEmpty() && searchResults.isNotEmpty()) {
-            SearchHighlightVisualTransformation(searchResults, currentSearchIndex, activeColor, inactiveColor)
-        } else {
-            null
-        }
-    }
     
     BasicTextField(
         value = textFieldValue,
@@ -571,30 +541,66 @@ private fun EditableTextField(
 }
 
 /**
- * Visual transformation for search highlighting in editable field
+ * Optimized viewer for large files using LazyColumn
  */
-private class SearchHighlightVisualTransformation(
-    private val searchResults: List<IntRange>,
-    private val currentIndex: Int,
-    private val activeColor: Color,
-    private val inactiveColor: Color
+@Composable
+private fun LargeFileViewer(
+    text: String,
+    showLineNumbers: Boolean,
+    modifier: Modifier = Modifier
 ) {
-    fun filter(text: AnnotatedString): AnnotatedString {
-        return buildAnnotatedString {
-            append(text)
-            searchResults.forEachIndexed { index, range ->
-                if (range.last < text.length) {
-                    val bgColor = if (index == currentIndex) {
-                        activeColor
-                    } else {
-                        inactiveColor
-                    }
-                    addStyle(
-                        SpanStyle(background = bgColor),
-                        range.first,
-                        range.last + 1
+    val lines = remember(text) { text.lines() }
+    val listState = rememberLazyListState()
+    
+    Row(modifier = modifier.fillMaxSize()) {
+        if (showLineNumbers) {
+            val lineNumberWidth = remember(lines.size) {
+                (lines.size.toString().length * 9 + 16).dp
+            }
+            
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .width(lineNumberWidth)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    .fillMaxHeight()
+            ) {
+                itemsIndexed(lines) { index, _ ->
+                    Text(
+                        text = (index + 1).toString(),
+                        style = CodeTextStyle.copy(
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            lineHeight = 18.sp,
+                            platformStyle = PlatformTextStyle(includeFontPadding = false)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp),
+                        textAlign = TextAlign.End
                     )
                 }
+            }
+        }
+        
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .horizontalScroll(rememberScrollState())
+        ) {
+            itemsIndexed(lines) { _, line ->
+                Text(
+                    text = line,
+                    style = CodeTextStyle.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
@@ -618,9 +624,7 @@ private fun buildHighlightedText(
     language: String?,
     searchQuery: String,
     searchResults: List<IntRange>,
-    currentSearchIndex: Int,
-    activeColor: Color,
-    inactiveColor: Color
+    currentSearchIndex: Int
 ): AnnotatedString {
     return buildAnnotatedString {
         append(text)
@@ -664,13 +668,13 @@ private fun buildHighlightedText(
             }
         }
         
-        // Highlight search results (overlays on top of syntax highlighting)
+        // Highlight search results
         searchResults.forEachIndexed { index, range ->
             if (range.last < text.length) {
                 val bgColor = if (index == currentSearchIndex) {
-                    activeColor // Current match
+                    Color(0xFFFFE082)
                 } else {
-                    inactiveColor // Other matches
+                    Color(0xFFFFEB3B).copy(alpha = 0.3f)
                 }
                 addStyle(
                     SpanStyle(background = bgColor),
@@ -701,70 +705,7 @@ private fun mapLanguageToSyntax(language: String): SyntaxLanguage? {
         "dart" -> SyntaxLanguage.DART
         "perl" -> SyntaxLanguage.PERL
         "coffeescript", "coffee" -> SyntaxLanguage.COFFEESCRIPT
-        "json" -> SyntaxLanguage.JAVASCRIPT
         else -> null
-    }
-}
-
-/**
- * Optimized viewer for large files using LazyColumn
- */
-@Composable
-private fun LargeFileViewer(
-    text: String,
-    showLineNumbers: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val lines = remember(text) { text.lines() }
-    val listState = rememberLazyListState()
-    
-    Row(modifier = modifier.fillMaxSize()) {
-        if (showLineNumbers) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .widthIn(min = 40.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                    .fillMaxHeight()
-            ) {
-                itemsIndexed(lines) { index, _ ->
-                    Text(
-                        text = (index + 1).toString(),
-                        style = CodeTextStyle.copy(
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            lineHeight = 18.sp,
-                            platformStyle = PlatformTextStyle(includeFontPadding = false)
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 0.dp),
-                        textAlign = TextAlign.End
-                    )
-                }
-            }
-        }
-        
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .horizontalScroll(rememberScrollState())
-        ) {
-            itemsIndexed(lines) { _, line ->
-                Text(
-                    text = line,
-                    style = CodeTextStyle.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                        platformStyle = PlatformTextStyle(includeFontPadding = false)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
     }
 }
 

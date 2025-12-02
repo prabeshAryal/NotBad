@@ -42,7 +42,9 @@ sealed interface FileViewerUiState {
     /**
      * Initial state - no file loaded
      */
-    data object Idle : FileViewerUiState
+    data class Idle(
+        val recentFiles: List<String> = emptyList()
+    ) : FileViewerUiState
 
     /**
      * Loading state - file is being opened/analyzed
@@ -94,6 +96,7 @@ sealed interface ContentState {
         val isTruncated: Boolean = false,
         val totalSize: Long = 0,
         val isWordWrapEnabled: Boolean = true,
+        val showLineNumbers: Boolean = false,
         val isSearchVisible: Boolean = false,
         val searchQuery: String = ""
     ) : ContentState
@@ -179,6 +182,21 @@ sealed interface FileViewerEvent {
      * User wants to see file info
      */
     data object ShowFileInfo : FileViewerEvent
+
+    /**
+     * User toggled line numbers
+     */
+    data object ToggleLineNumbers : FileViewerEvent
+
+    /**
+     * User requested to create a new file
+     */
+    data class CreateFile(val callback: () -> Unit) : FileViewerEvent
+
+    /**
+     * User clicked a recent file
+     */
+    data class OpenRecentFile(val uri: String) : FileViewerEvent
 }
 
 /**

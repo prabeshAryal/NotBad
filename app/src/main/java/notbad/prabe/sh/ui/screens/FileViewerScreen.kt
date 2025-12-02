@@ -56,6 +56,7 @@ fun FileViewerScreen(
     viewModel: FileViewerViewModel,
     onNavigateBack: () -> Unit,
     onOpenFile: () -> Unit,
+    onCreateFile: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -131,7 +132,14 @@ fun FileViewerScreen(
         ) {
             when (val state = uiState) {
                 is FileViewerUiState.Idle -> {
-                    EmptyState(onOpenFile = onOpenFile)
+                    EmptyState(
+                        onOpenFile = onOpenFile,
+                        onCreateFile = onCreateFile,
+                        recentFiles = state.recentFiles,
+                        onOpenRecentFile = { uriString ->
+                            viewModel.onEvent(FileViewerEvent.OpenRecentFile(uriString))
+                        }
+                    )
                 }
 
                 is FileViewerUiState.Loading -> {
@@ -183,6 +191,11 @@ private fun FileViewerContent(
         is ContentState.TextContent -> content.isWordWrapEnabled
         else -> true
     }
+    
+    val showLineNumbers = when (val content = state.contentState) {
+        is ContentState.TextContent -> content.showLineNumbers
+        else -> false
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Top app bar
@@ -191,12 +204,14 @@ private fun FileViewerContent(
             viewMode = state.viewMode,
             isModified = isModified,
             wordWrapEnabled = wordWrapEnabled,
+            showLineNumbers = showLineNumbers,
             onNavigateBack = onNavigateBack,
             onSave = { onEvent(FileViewerEvent.SaveFile) },
             onReload = { onEvent(FileViewerEvent.ReloadFile) },
             onViewModeChange = { onEvent(FileViewerEvent.ChangeViewMode(it)) },
             onToggleWordWrap = { onEvent(FileViewerEvent.ToggleWordWrap) },
             onToggleSearch = { onEvent(FileViewerEvent.ToggleSearch) },
+            onToggleLineNumbers = { onEvent(FileViewerEvent.ToggleLineNumbers) },
             onShowFileInfo = onShowFileInfo
         )
 
@@ -290,7 +305,7 @@ private fun TextContentView(
                 onTextChange = onTextChange,
                 isReadOnly = isReadOnly,
                 language = null,
-                showLineNumbers = false,
+                showLineNumbers = content.showLineNumbers,
                 wordWrapEnabled = wordWrapEnabled,
                 searchQuery = content.searchQuery,
                 onSearchQueryChange = onSearchQueryChange,
@@ -325,7 +340,7 @@ private fun TextContentView(
                 onTextChange = onTextChange,
                 isReadOnly = isReadOnly,
                 language = content.language,
-                showLineNumbers = true,
+                showLineNumbers = content.showLineNumbers,
                 wordWrapEnabled = wordWrapEnabled,
                 searchQuery = content.searchQuery,
                 onSearchQueryChange = onSearchQueryChange,
@@ -348,7 +363,7 @@ private fun TextContentView(
                 onTextChange = onTextChange,
                 isReadOnly = isReadOnly,
                 language = "markdown",
-                showLineNumbers = false,
+                showLineNumbers = content.showLineNumbers,
                 wordWrapEnabled = wordWrapEnabled,
                 searchQuery = content.searchQuery,
                 onSearchQueryChange = onSearchQueryChange,
